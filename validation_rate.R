@@ -1,0 +1,5 @@
+load(file.path(path.diagrams, "Biomarkers_uhn_status.RData"), verbose=TRUE)
+xx <- c("AZD6244","Erlotinib", "lapatinib", "paclitaxel")
+sapply(xx, function(x){table(biomarkers[[x]]$type)["isoform"]})
+sapply(xx, function(x){length(which(biomarkers[[x]]$type =="isoform" & biomarkers[[x]]$validation.stat == "validated"))})
+sapply(xx, function(x){length(which(biomarkers[[x]]$UHN.pvalue < 0.1 & !is.na(biomarkers[[x]]$UHN.pvalue)))})
