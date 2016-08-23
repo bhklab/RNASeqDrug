@@ -1,4 +1,4 @@
-#system(paste("Rscript code/training_phase.R", 5037, 5038, "auc_recomputed", 1, 10, TRUE, "ccle_gdsc", "glm", "gaussian", "all", "test"))
+  #system(paste("Rscript code/training_phase.R", 5037, 5038, "auc_recomputed", 1, 10, TRUE, "ccle_gdsc", "glm", "gaussian", "all", "test"))
 args <- commandArgs(trailingOnly=TRUE)
 #args <- c("36891", "37200", "auc_recomputed", "1", "1", "TRUE", "ccle_gdsc", "glm", "gaussian", "all", "test")
 require(PharmacoGx) || stop("Library PharmacoGx is not available!")

@@ -226,7 +226,7 @@ fnPlotSensitivity <- function(sensitivity, file.name, type="validation") {
   par(mar=c(12,8,1,1))
 #  par(oma=c(2,2,2,2))
   plot(NA, xlim = my.xlim, ylim = my.ylim,ylab='',xlab='', axes = FALSE)
-#  axis(1,at = 1:length(sensitivity), labels=names(sensitivity), las = 2, cex.axis = 1.6,  tck = -.05)
+  axis(1,at = 1:length(sensitivity), labels=rep("", length(sensitivity)), tck = -.02)
   text(1:length(sensitivity), par("usr")[3], labels=names(sensitivity), srt=45, adj=c(1.1,1.1), xpd=TRUE, cex=ifelse(length(sensitivity) > 20, 1.2, 1.8))
   axis(2,at = c(0,.1,.2,.3,.4,.5), labels=c(0,.1,.2,.3,.4,.5), cex.axis = 1, tck = -.02)
   
@@ -350,6 +350,36 @@ fnCor <- function(drug, gene, xx) {
   pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_gene_corr_bar_plot.pdf", drug, gene)), height=6, width=2)
   barplot(tt, horiz = T, col=cc , yaxt='n', cex.axis=1.2)
   abline(v=0.8, lty=2)
+  dev.off()
+}
+fnExp <- function(drug, gene, exp) {
+  tt <- apply(exp, MARGIN=2, function(x){mean(x)})
+  tt <- tt/sum(tt, na.rm=T)
+  tt[which(is.na(tt))] <- 0
+  if(gene == "TNKS1BP1")
+  {
+    tt <- tt[rev(c("ENST00000528882", "ENST00000358252", "ENST00000527207", "ENST00000532437", "ENST00000427750", "ENST00000530920", "ENST00000532273"))]
+  }
+  if(gene == "TGFA")
+  {
+    tt <- tt[rev(c("ENST00000295400", "ENST00000445399", "ENST00000474101", "ENST00000418333", "ENST00000450929", "ENST00000444975", "ENST00000394241", "ENST00000460808", "ENST00000419940"))]
+  }
+  if(gene == "DUOX1")
+  {
+    tt <- tt[rev(c("ENST00000389037", "ENST00000321429", "ENST00000558322", "ENST00000561220", "ENST00000561166", "ENST00000557893", "ENST00000559716", "ENST00000558991", "ENST00000559219", "ENST00000558446", "ENST00000559221", "ENST00000558744"))]
+  }
+  if(gene == "HNRPDL")
+  {
+    tt <- tt[rev(c("ENST00000295470", "ENST00000507721", "ENST00000502762", "ENST00000349655", "ENST00000514511"))]
+  }
+  if(gene == "CPEB4")
+  {
+    tt <- tt[rev(c("ENST00000265085", "ENST00000334035", "ENST00000520867", "ENST00000519835", "ENST00000522336", "ENST00000519467", "ENST00000519152", "ENST00000517880", "ENST00000518141", "ENST00000522344"))]
+  }
+  cc <- rep("gray", length(tt))
+  cc[which(names(tt) == best.isoform)] <- "red"
+  pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_relative_exp.pdf", drug, gene)), height=6, width=2)
+  barplot(tt, horiz = T, col=cc , yaxt='n', cex.axis=1.2)
   dev.off()
 }
 

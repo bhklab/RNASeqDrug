@@ -262,6 +262,7 @@ for(drug in names(biomarkers)) {
       expression <- cbind(gray.isoforms.fpkm[ , isoforms.ordered], "gene"=gray.genes.fpkm[, as.character(annot.gene$gene_id)])
       xx <- cor(expression[gray.cells,], expression[gray.cells,], use="pairwise", method="spearman")
       fnCor(drug, gene, xx)
+      fnExp(drug, gene, gray.isoforms.fpkm[ , isoforms.ordered])
       colnames(expression)[ncol(expression)] <- annot.gene$gene_id
 
       xx <- fnPlotHeatMap(sensitivity=gray.auc, expression=expression, file.name=sprintf("%s_%s_in_silico", drug, gene), best.isoform=best.isoform)
