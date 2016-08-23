@@ -79,15 +79,25 @@ benjamin.haibe.kains@utoronto.ca, zhaleh.safikhani@utoronto.ca
 Run the R scripts
 -------------------------------
 
-* training_phase.R: Script is computing signature for the effect of each gene and its isoforms expression on the molecular profile of cell lines for each drug. It returns the estimated coefficient, the the p-values, statistics(mean, median, min, max and variance) of adjusted r squared for the association of each gene and its isoforms to each drug in a dataset named auc_recomputed_drug_association.RData.
+#training_phase.R: 
 
-#This script takes a long time to be completed. You can ask authors to provide you with the auc_recomputed_drug_association.RData to skip this long step
+Script is computing signature for the effect of each gene and its isoforms expression on the molecular profile of cell lines for each drug. It returns the estimated coefficient, the the p-values, statistics(mean, median, min, max and variance) of adjusted r squared for the association of each gene and its isoforms to each drug in a dataset named auc_recomputed_drug_association.RData.
 
-*training_results.R: Script is computing the false discovery rate of the results and report the strongest breast cancer treatment biomarkers for all 15 drugs in common between CCLE and GDSC in a dataset named all.biomarkers.RData.
+*This script takes a long time to be completed. You can ask authors to provide you with the auc_recomputed_drug_association.RData to skip this long step
 
-*Pre_Validation.R: Script is validating biomarkers against GRAY dataset and put the validation results in Biomarkers_with_validation_status_2_R2.RData
+#training_results.R: 
 
-*Final_Validation.R: Script is validating pre validated biomarkers against UHN dataset and pute the final validation results in Biomarkers_uhn_status.RData and creates the main figures of paper.
+Script is computing the false discovery rate of the results and report the strongest breast cancer treatment biomarkers for all 15 drugs in common between CCLE and GDSC in a dataset named all.biomarkers.RData.
 
-*Supplementary_Files.R: Script is creating supplemntary figures, files and tables
+#Pre_Validation.R: 
+
+Script is validating biomarkers against GRAY dataset and put the validation results in Biomarkers_with_validation_status_2_R2.RData
+
+#Final_Validation.R: 
+
+Script is validating pre validated biomarkers against UHN dataset and pute the final validation results in Biomarkers_uhn_status.RData and creates the main figures of paper.
+
+#Supplementary_Files.R: 
+
+Script is creating supplemntary figures, files and tables
 
