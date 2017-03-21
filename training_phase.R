@@ -16,6 +16,7 @@ print(args)
 # 
 # load(file.path(path.data, "ensembl.map.genes.isoforms.RData"), verbose=TRUE)
 
+
 load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE.CTRPv2.RData", verbose=TRUE)
 annotation(CCLE.CTRPv2@molecularProfiles$rnaseq) <- "rna"
 annotation(CCLE.CTRPv2@molecularProfiles$isoforms) <- "rna"
@@ -1134,6 +1135,9 @@ fnSensitivityOneDataSetMutCnv <- function (MicroArrayExp, Gene_FPKM, Isoforms, G
 ### We confined our analyses to protein coding genes in this step
 #GeneList <- fData(CCLE@molecularProfiles$rnaseq)[which(fData(CCLE@molecularProfiles$rnaseq)[, "GeneBioType"]== "protein_coding"), "EnsemblGeneId"]
 
+GeneList <- fData(CCLE.CTRPv2@molecularProfiles$rnaseq)[,"EnsemblGeneId"]
+GeneListn <- length(GeneList)
+
 
 sensitivity.method <- as.character(args[3])# c("auc_published", "auc_recomputed", "slope_recomputed", "ic50_published", "ic50_recomputed")
 RNA_seq.normalize <- as.character(args[6])# c(TRUE,FALSE)
@@ -1202,6 +1206,7 @@ gdsc.cells <- intersectList(rownames(gdsc.drug.sensitivity), rownames(ccle.genes
 GeneList <- colnames(ccle.genes.fpkm)
 GeneListn <- length(GeneList)
 
+
 # if(RNA_seq.normalize == FALSE)
 # {
 #   ccle.genes.fpkm <- 2 ^ ccle.genes.fpkm - 1
@@ -1244,7 +1249,7 @@ for(i in startIndex: finishIndex)
   #Gene <-  "ENSG00000181019" "1728" #NQO1 "3480" #IGF1R
   #Gene <- "ENSG00000148426" "C10orf47"
   #MicroArrayExp <- ccle.drug.microarray.exp[,Gene]; Gene_FPKM <- ccle.genes.fpkm[,Gene]; Isoforms <- fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene); GeneID <- Gene;  model.method <- "npreg"; method <- "bootstrap"; stat <- "adj.r.squared";glm.family <- "gaussian"; tissue <- NULL; sample.no.threshold <- 5; assay <- "ccle"
-  #which(fData(common$CCLE@molecularProfiles$rnaseq)[, "EntrezGeneId"]=="1728") #18024
+  #which(fData(common$CCLE.CTRPv2@molecularProfiles$rnaseq)[, "EntrezGeneId"]=="1728") #18024
   Gene <- as.character(GeneList[i])
   #print(Gene)
   if(training.method == "ccle_gdsc")
