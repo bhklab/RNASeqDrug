@@ -1,6 +1,6 @@
 fnBuildLinearModel <- function(cells, sensitivity, features, fpkm.matrix) {
   complete.models <- list()
-  models <- data.frame(matrix(NA, ncol=5, nrow=length(features), dimnames=list(features, c("pvalue", "estimate", "R2", "se", "n"))), stringsAsFactors=FALSE)
+  models <- data.frame(matrix(NA, ncol=5, nrow=length(features), dimnames=list(features, c("pvalue", "estimate", stat, "se", "n"))), stringsAsFactors=FALSE)
   for(feature in features) {
     if(!all(is.na(fpkm.matrix[cells, feature]))) {
       tt <- cbind("auc"=sensitivity[cells], "exp"=fpkm.matrix[cells, feature])
@@ -13,7 +13,7 @@ fnBuildLinearModel <- function(cells, sensitivity, features, fpkm.matrix) {
       {
         models[feature,"pvalue"] <- summary(model)$coefficients[2,4]
         models[feature,"estimate"] <- summary(model)$coefficients[2,1]
-        models[feature,"R2"] <- summary(model)$adj.r.squared
+        models[feature,stat] <- summary(model)$adj.r.squared
         models[feature,"se"] <- summary(model)$coefficients[2,2]
       }
       complete.models[[feature]] <- model
@@ -24,7 +24,7 @@ fnBuildLinearModel <- function(cells, sensitivity, features, fpkm.matrix) {
 fnNormalizeTraining <- function(ccle.model, gdsc.model) {
   xx <- data.frame(cbind("estimate"=ccle.model$estimate * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$estimate * gdsc.model$n/(ccle.model$n + gdsc.model$n),
                          "pvalue"=ccle.model$pvalue * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$pvalue * gdsc.model$n/(ccle.model$n + gdsc.model$n),
-                         "R2"=ccle.model$R2 * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$R2 * gdsc.model$n/(ccle.model$n + gdsc.model$n),
+                         stat=ccle.model[ ,stat] * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model[,stat] * gdsc.model$n/(ccle.model$n + gdsc.model$n),
                          "se"=ccle.model$se * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$se * gdsc.model$n/(ccle.model$n + gdsc.model$n)), stringsAsFactors=FALSE)
   rownames(xx) <- rownames(ccle.model)
   return(xx)

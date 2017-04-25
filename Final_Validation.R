@@ -14,14 +14,14 @@ path.code <- file.path("code")
 path.result <- file.path("result")
 path.diagrams <- file.path(sprintf("result/%s", sensitivity.type))
 
-validation.method <- "R2"
+stat <- "cindex"
+validation.method <- stat
+RNA_seq.normalize <- TRUE
 
-load(file.path("data/annotation.RData"), verbose = T)
-
-load(file.path(path.data, "PSets/CCLE_isoforms.RData"))
+load(file.path(path.data, "PSets/CCLE_hs.RData"))
 load(file.path(path.data, "PSets/GDSC.RData"))
-load(file.path(path.data, "PSets/GRAY_isoforms.RData"))
-load(file.path(path.data, "PSets/UHN.RData"))
+load(file.path(path.data, "PSets/GRAY_hs.RData"))
+load(file.path(path.data, "PSets/UHN_hs.RData"))
 
 gdsc.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GDSC, sensitivity.measure=sensitivity.type))
 ccle.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=CCLE, sensitivity.measure=sensitivity.type))
@@ -37,6 +37,22 @@ uhn.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=UHN, sen
 uhn.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=UHN, mDataType="rnaseq", fill.missing=FALSE)))
 uhn.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=UHN, mDataType="isoforms", fill.missing=FALSE)))
 
+ccle.isoforms.fpkm[which(is.na(ccle.isoforms.fpkm))] <- 0
+gray.isoforms.fpkm[which(is.na(gray.isoforms.fpkm))] <- 0
+uhn.isoforms.fpkm[which(is.na(uhn.isoforms.fpkm))] <- 0
+if(RNA_seq.normalize == TRUE)
+{
+  ccle.genes.fpkm <- log2(ccle.genes.fpkm + 1)
+  ccle.isoforms.fpkm <- log2(ccle.isoforms.fpkm + 1)
+  
+  gray.genes.fpkm <- log2(gray.genes.fpkm + 1)
+  gray.isoforms.fpkm <- log2(gray.isoforms.fpkm + 1)
+
+  uhn.genes.fpkm <- log2(uhn.genes.fpkm + 1)
+  uhn.isoforms.fpkm <- log2(uhn.isoforms.fpkm + 1)
+}
+annot.ensembl.all.genes <- Biobase::fData(CCLE@molecularProfiles$rnaseq)
+annot.ensembl.all.transcripts <- Biobase::fData(CCLE@molecularProfiles$isoforms)
 mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")
 mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
 
@@ -44,17 +60,17 @@ mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
 cutoff <- 0.1
 red <- mycol[1]  
 blue <- mycol[2]
-load(file.path(path.diagrams, sprintf("Biomarkers_with_validation_status_2_%s.RData", validation.method)), verbose=TRUE)
+#load(file.path(path.diagrams, sprintf("Biomarkers_with_validation_status_2_%s.RData", validation.method)), verbose=TRUE)
+load(file.path(path.diagrams, sprintf("Biomarkers_with_validation_status_%s.RData", validation.method)), verbose=TRUE)
 drugs <- colnames(uhn.drug.sensitivity)
 for(drug in drugs) {
-  biomarkers[[drug]][, c("UHN.estimate", "UHN.pvalue", "UHN.R2", "gene.biotype")] <- NA
-  biomarkers[[drug]][,"id"] <- biomarkers[[drug]]$gene.id
-  biomarkers[[drug]][which(biomarkers[[drug]]$type == "isoform"),"id"] <- biomarkers[[drug]][which(biomarkers[[drug]]$type == "isoform"), "transcript.id"]
+  biomarkers[[drug]][, c("UHN.estimate", "UHN.pvalue", paste0("UHN.",stat), "gene.biotype")] <- NA
+  biomarkers[[drug]][,"id"] <- biomarkers[[drug]][,"biomarker.id"]
   tt <- biomarkers[[drug]]
-  tt <- subset(tt,  tt$ccle > 0)
-  vtt <- subset(tt, tt$validation.stat == "validated")
-  vtt <- subset(vtt, vtt$gray.specificity == "isoform.specific")
-  #vtt <- subset(vtt, vtt$type == "isoform")
+  tt <- tt[which(tt[,"ccle"] > 0),,drop=F]
+  vtt <- tt[which(tt[,"validation.stat"] == "validated"),,drop=F]
+  #vtt <- subset(vtt, vtt$gray.specificity == "isoform.specific")
+  vtt <- vtt[which(vtt[,"type"] == "isoform"),,drop=F]
   
   xx <- fnFetchBiomarkers(top.significant.biomarkers=vtt, drug=drug, indices=1:nrow(vtt))
   xx <- do.call(rbind, xx)
@@ -85,21 +101,21 @@ for(drug in drugs) {
   names(xx) <- colnames(exp.db)
   sensitivity <- uhn.drug.sensitivity[!is.na(uhn.drug.sensitivity[ , drug]) , drug]
   exp.db <- exp.db[names(sensitivity), , drop=FALSE]
-  uhn.models <- matrix(NA, ncol=4, nrow=ncol(exp.db), dimnames=list(colnames(exp.db), c("pvalue", "estimate", "R2", "gene_biotype")))
+  uhn.models <- matrix(NA, ncol=4, nrow=ncol(exp.db), dimnames=list(colnames(exp.db), c("pvalue", "estimate", stat, "gene_biotype")))
   for(marker in colnames(exp.db)) {
     uhn.model <- lm(sensitivity  ~ exp.db[, marker])
     uhn.pvalue <- 2 
-    uhn.estimate <- uhn.R2 <- 0
+    uhn.estimate <- uhn.stat <- 0
     if(all(!is.na(uhn.model)) & !is.na(uhn.model$coefficients[2]))
     {
       uhn.models[marker,"pvalue"] <- summary(uhn.model)$coefficients[2,4]
       uhn.models[marker,"estimate"] <- summary(uhn.model)$coefficients[2,1]
-      uhn.models[marker,"R2"] <- summary(uhn.model)$adj.r.squared
-      uhn.models[marker,"gene_biotype"] <- annot.ensembl.all.transcripts[marker, "gene_biotype"]
+      uhn.models[marker,stat] <- summary(uhn.model)$adj.r.squared
+      uhn.models[marker,"gene_biotype"] <- annot.ensembl.all.transcripts[marker, "TranscriptBioType"]
     }
   }
   if(!is.null(rownames(uhn.models))) {
-    biomarkers[[drug]][match(rownames(uhn.models), biomarkers[[drug]][,"id"]), c("UHN.estimate", "UHN.pvalue", "UHN.R2", "gene.biotype")] <- uhn.models[, c("estimate", "pvalue", "R2", "gene_biotype")]
+    biomarkers[[drug]][match(rownames(uhn.models), biomarkers[[drug]][,"id"]), c("UHN.estimate", "UHN.pvalue", paste0("UHN.",stat), "gene.biotype")] <- uhn.models[, c("estimate", "pvalue", stat, "gene_biotype")]
     uhn.models <- uhn.models[which(as.numeric(uhn.models[,"pvalue"]) < cutoff & sign(as.numeric(uhn.models[,"estimate"])) == sign(as.numeric(vtt[match(rownames(uhn.models), vtt$id), "estimate"]))), , drop=FALSE]
   } 
   message(drug)
@@ -204,9 +220,9 @@ for(drug in names(biomarkers)) {
       gene <- biomarkers[[drug]][x, "symbol"] 
       gene.id <- biomarkers[[drug]][x, "gene.id"]
       best.isoform <- biomarkers[[drug]][x, "transcript.id"]
-      annot.isoforms <- annot.ensembl.all.transcripts[which(annot.ensembl.all.transcripts$gene_id == gene.id),]
+      annot.isoforms <- annot.ensembl.all.transcripts[which(annot.ensembl.all.transcripts[,"EnsemblGeneId"] == gene.id),]
       annot.isoforms <- intersectList(rownames(annot.isoforms), colnames(ccle.isoforms.fpkm), colnames(gray.isoforms.fpkm), colnames(uhn.isoforms.fpkm))
-      annot.gene <- annot.ensembl.all.genes[which(annot.ensembl.all.genes$gene_id == gene.id), ]
+      annot.gene <- annot.ensembl.all.genes[which(annot.ensembl.all.genes[,"EnsemblGeneId"] == gene.id), ]
       
       cat(sprintf("%s, %s, %s, cutoff=%s\n", gene, best.isoform, drug, cutoff), file=results, append=TRUE)
 
@@ -226,15 +242,15 @@ for(drug in names(biomarkers)) {
       training.isoforms.models <- fnNormalizeTraining(ccle.isoforms.models$simplified, gdsc.isoforms.models$simplified)
       #training.isoforms.models <- ccle.isoforms.models$simplified
       
-      ccle.gene.model <- fnBuildLinearModel(cells=ccle.breast.cells, sensitivity=ccle.auc, features=annot.gene$gene_id, fpkm.matrix=ccle.genes.fpkm)
-      gdsc.gene.model <- fnBuildLinearModel(cells=gdsc.breast.cells, sensitivity=gdsc.auc, features=annot.gene$gene_id, fpkm.matrix=ccle.genes.fpkm)
+      ccle.gene.model <- fnBuildLinearModel(cells=ccle.breast.cells, sensitivity=ccle.auc, features=annot.gene$EnsemblGeneId, fpkm.matrix=ccle.genes.fpkm)
+      gdsc.gene.model <- fnBuildLinearModel(cells=gdsc.breast.cells, sensitivity=gdsc.auc, features=annot.gene$EnsemblGeneId, fpkm.matrix=ccle.genes.fpkm)
       
       training.gene.model <- fnNormalizeTraining(ccle.gene.model$simplified, gdsc.gene.model$simplified)
       #training.gene.model <- ccle.gene.model$simplified
       #training.models.isoforms <- training.models.isoforms[which(training.models.isoforms[,"pvalue"] < cutoff), , drop=FALSE]
       
-      expression <- cbind(ccle.isoforms.fpkm[ , annot.isoforms], "gene"=ccle.genes.fpkm[, annot.gene$gene_id])
-      colnames(expression)[ncol(expression)] <- annot.gene$gene_id
+      expression <- cbind(ccle.isoforms.fpkm[ , annot.isoforms], "gene"=ccle.genes.fpkm[, annot.gene$EnsemblGeneId])
+      colnames(expression)[ncol(expression)] <- annot.gene$EnsemblGeneId
       
       isoforms.ordered <- fnPlotHeatMap(sensitivity=ccle.auc, expression=expression, file.name=sprintf("%s_%s", drug, gene), cluster=TRUE, best.isoform=best.isoform)
       isoforms.ordered <- fnPlotHeatMap.union.cells(ccle.sensitivity=ccle.auc, gdsc.sensitivity=gdsc.auc, expression=expression, file.name=sprintf("%s_%s", drug, gene), cluster=TRUE, best.isoform=best.isoform)
@@ -256,14 +272,14 @@ for(drug in names(biomarkers)) {
       gray.auc <- gray.drug.sensitivity[gray.cells, drug]
 
       gray.isoforms.models <- fnBuildLinearModel(cells=rownames(gray.isoforms.fpkm), sensitivity=gray.auc, features=isoforms.ordered, fpkm.matrix=gray.isoforms.fpkm)
-      gray.gene.model <- fnBuildLinearModel(cells=rownames(gray.genes.fpkm), sensitivity=gray.auc, features=as.character(annot.gene$gene_id), fpkm.matrix=gray.genes.fpkm)
+      gray.gene.model <- fnBuildLinearModel(cells=rownames(gray.genes.fpkm), sensitivity=gray.auc, features=as.character(annot.gene$EnsemblGeneId), fpkm.matrix=gray.genes.fpkm)
       
       #in.silico.models.isoforms <- in.silico.models.isoforms[which(in.silico.models.isoforms[,"pvalue"] < cutoff & sign(in.silico.models.isoforms[,"estimate"]) == sign(training.models.isoforms[,"estimate"])), , drop=FALSE]
-      expression <- cbind(gray.isoforms.fpkm[ , isoforms.ordered], "gene"=gray.genes.fpkm[, as.character(annot.gene$gene_id)])
+      expression <- cbind(gray.isoforms.fpkm[ , isoforms.ordered], "gene"=gray.genes.fpkm[, as.character(annot.gene$EnsemblGeneId)])
       xx <- cor(expression[gray.cells,], expression[gray.cells,], use="pairwise", method="spearman")
       fnCor(drug, gene, xx)
       fnExp(drug, gene, gray.isoforms.fpkm[ , isoforms.ordered])
-      colnames(expression)[ncol(expression)] <- annot.gene$gene_id
+      colnames(expression)[ncol(expression)] <- annot.gene$EnsemblGeneId
 
       xx <- fnPlotHeatMap(sensitivity=gray.auc, expression=expression, file.name=sprintf("%s_%s_in_silico", drug, gene), best.isoform=best.isoform)
       fnPlotSensitivity(sensitivity=gray.auc, file.name=sprintf("%s_%s_in_silico", drug, gene))
@@ -281,13 +297,13 @@ for(drug in names(biomarkers)) {
       uhn.auc <- uhn.drug.sensitivity[ , drug]
       
       uhn.isoforms.models <- fnBuildLinearModel(cells=rownames(uhn.isoforms.fpkm), sensitivity=uhn.auc, features=isoforms.ordered, fpkm.matrix=uhn.isoforms.fpkm)
-      uhn.gene.model <- fnBuildLinearModel(cells=rownames(uhn.genes.fpkm), sensitivity=uhn.auc, features=as.character(annot.gene$gene_id), fpkm.matrix=uhn.genes.fpkm)
+      uhn.gene.model <- fnBuildLinearModel(cells=rownames(uhn.genes.fpkm), sensitivity=uhn.auc, features=as.character(annot.gene$EnsemblGeneId), fpkm.matrix=uhn.genes.fpkm)
       
       #in.vitro.models.isoforms <- in.vitro.models.isoforms[which(in.vitro.models.isoforms[,"pvalue"] < cutoff & sign(in.vitro.models.isoforms[,"estimate"]) == sign(in.silico.models.isoforms[,"estimate"])), , drop=FALSE]
-      expression <- cbind(uhn.isoforms.fpkm[ , isoforms.ordered], "gene"=uhn.genes.fpkm[, as.character(annot.gene$gene_id)])
+      expression <- cbind(uhn.isoforms.fpkm[ , isoforms.ordered], "gene"=uhn.genes.fpkm[, as.character(annot.gene$EnsemblGeneId)])
       xx <- expression[, c(best.isoform,"gene"), drop=FALSE]
       fnPlotHeatMap(sensitivity=uhn.auc, file.name=sprintf("%s_%s_image.pdf", gene, drug), cluster=FALSE, expression=xx, best.isoform=best.isoform)
-      colnames(expression)[ncol(expression)] <- annot.gene$gene_id
+      colnames(expression)[ncol(expression)] <- annot.gene$EnsemblGeneId
       
       xx <- fnPlotHeatMap(sensitivity=uhn.auc, expression=expression, file.name=sprintf("%s_%s_in_vitro", drug, gene), best.isoform=best.isoform)
       fnPlotSensitivity(sensitivity=uhn.auc, file.name=sprintf("%s_%s_in_vitro", drug, gene))

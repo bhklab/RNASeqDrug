@@ -1,7 +1,7 @@
-#system(paste("Rscript code/training_phase.R", 5037, 5038, "auc_recomputed", 1, 10, TRUE, "ccle_gdsc", "glm", "gaussian", "all", "test"))
+###system(paste("Rscript code/training_phase.R", 5037, 5038, "auc_recomputed", 1, 10, TRUE, "ccle_gdsc", "glm", "gaussian", "all", "test"))
 args <- commandArgs(trailingOnly=TRUE)
 ##for test
-#args <- c("1", "10", "auc_recomputed", "1", "1", "TRUE", "ccle_gdsc", "glm", "gaussian", "all", "/mnt/work1/users/bhklab/Users/zhaleh/ccledrug/_results")
+#args <- c("1", "10", "auc_recomputed", "1", "1", "TRUE", "gCSI", "glm", "gaussian", "all", "/mnt/work1/users/bhklab/Users/zhaleh/ccledrug/gne_results")
 #args <- c("5037", "5038", "auc_recomputed", "1", "1", "TRUE", "ccle_gdsc", "glm", "gaussian", "all", "/mnt/work1/users/bhklab/Users/zhaleh/ccledrug/_results")
 ##
 require(PharmacoGx) || stop("Library PharmacoGx is not available!")
@@ -16,13 +16,6 @@ print(args)
 # 
 # load(file.path(path.data, "ensembl.map.genes.isoforms.RData"), verbose=TRUE)
 
-load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE.CTRPv2.RData", verbose=TRUE)
-annotation(CCLE.CTRPv2@molecularProfiles$rnaseq) <- "rna"
-annotation(CCLE.CTRPv2@molecularProfiles$isoforms) <- "rna"
-CCLE <- CCLE.CTRPv2
-load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC1000.RData", verbose=TRUE)
-GDSC <- GDSC1000
-load("/mnt/work1/users/bhklab/Users/zhaleh/ensembl.map.genes.isoforms.GRCh38.87.RData", verbose=TRUE)
 orderDrugs <- function(data, metric, no){
   metric.data = double()
   for(i in 1:ncol(data)){ 
@@ -34,6 +27,16 @@ orderDrugs <- function(data, metric, no){
   }
   data.ordered <- data[,order(metric.data)]
   return(colnames(data.ordered)[1:no])
+}
+R2gauss<- function(y,model){
+  moy<-mean(y)
+  N<- length(y)
+  p<-length(model$coefficients)-1
+  SSres<- sum((y-predict(model))^2)
+  SStot<-sum((y-moy)^2)
+  R2<-1-(SSres/SStot)
+  Rajust<-1-(((1-R2)*(N-1))/(N-p-1))
+  return(data.frame(R2,Rajust,SSres,SStot))
 }
 rsq <- function(model, indices) {
   
@@ -110,7 +113,7 @@ rsq <- function(model, indices) {
   
   if(is.null(tissue))
   {
-    CIndex <- survcomp::concordance.index(x=y.hat, surv.time=data[rownames(newPRED),RESP.pos], surv.event=rep(1, length(y.hat)), na.rm=TRUE)[[1]]
+    CIndex <- survcomp::concordance.index(x=-y.hat, surv.time=data[rownames(newPRED),RESP.pos], surv.event=rep(1, length(y.hat)), na.rm=TRUE, outx=TRUE)[[1]]
   }else
   {
     CIndex <- 0
@@ -127,8 +130,8 @@ rsq <- function(model, indices) {
   R.square <- ifelse(R.square== -Inf, -100, R.square)
   Adjusted.R.square <- 1 - (1 - R.square) * ((n - 1)/(n - p - 1))
   Adjusted.R.square <- ifelse(Adjusted.R.square == -Inf, -100, Adjusted.R.square)
-  
-  return(list( rmsd=RMSD, cindex=abs(CIndex-0.5), r.squared=R.square, adj.r.squared=Adjusted.R.square))
+  xx<- R2gauss(y=newMOD$y, model=newMOD)
+  return(list( rmsd=RMSD, cindex=CIndex, r.squared=R.square, adj.r.squared=Adjusted.R.square, r.squared.train=xx[1,"R2"], adj.r.squared.train=xx[1,"Rajust"]))
 }
 fnboot <- function(models, R) {
   boot.res <- list()
@@ -137,6 +140,7 @@ fnboot <- function(models, R) {
     boot.res[[i]] <- numeric()
     names(boot.res)[i] <- names(models)[i]
   }
+  boot.res2 <- boot.res
   idx <- 1:nrow(models[[1]]$data)
   for(i in 1:R)
   {
@@ -154,9 +158,16 @@ fnboot <- function(models, R) {
           boot.res[[M]] <- c(boot.res[[M]], rsq(model=models[[M]], indices)$cindex)
         }, "adj.r.squared"={
           boot.res[[M]] <- c(boot.res[[M]], rsq(model=models[[M]], indices)$adj.r.squared)
+        }, "r.squared & cindex"={
+          xx <- rsq(model=models[[M]], indices)
+          boot.res[[M]] <- c(boot.res[[M]], xx$r.squared)
+          boot.res2[[M]] <- c(boot.res2[[M]], xx$cindex)
         })
       }
     }
+  }
+  if(stat == "r.squared & cindex") {
+    return(list(cindex=boot.res2, r.squared=boot.res))
   }
   return(boot.res)
 }
@@ -232,7 +243,7 @@ fnIsoformsExp <- function(Isoforms_FPKM, GeneId) {
   Isoforms_of_Genes <- fnIsoforms_of_Gene(GeneID=GeneId)
   for(j in 1: nrow(Isoforms_of_Genes))
   {
-    if (as.character(Isoforms_of_Genes[j,]) %in% colnames(ccle.isoforms.fpkm))
+    if (as.character(Isoforms_of_Genes[j,]) %in% colnames(Isoforms_FPKM))
     {
       Isoformsdf[,as.character(Isoforms_of_Genes[j,])] <- Isoforms_FPKM [,as.character(Isoforms_of_Genes[j,])]
       linearFormula_Iso <- paste(linearFormula_Iso , as.character(Isoforms_of_Genes[j,]) , "+")
@@ -241,7 +252,7 @@ fnIsoformsExp <- function(Isoforms_FPKM, GeneId) {
   linearFormula_Iso <-  substr(linearFormula_Iso, 1, nchar(linearFormula_Iso)-1)
   return(list(FPKM=Isoformsdf, names=linearFormula_Iso))
 }
-fnCreateNullModel <- function(drug, assay=c("ccle", "gdsc", "gray")) {
+fnCreateNullModel <- function(drug, assay=c("ccle", "gdsc", "gray", "gCSI")) {
   tissues.no <- 1
   if(is.null(tissue))
   {
@@ -252,18 +263,19 @@ fnCreateNullModel <- function(drug, assay=c("ccle", "gdsc", "gray")) {
   switch(assay, 
          "ccle"={Sensitivity=ccle.drug.sensitivity[ccle.cells, ]}, 
          "gdsc"={Sensitivity=gdsc.drug.sensitivity[gdsc.cells, ]}, 
-         "gray"={Sensitivity=gray.drug.sensitivity})
+         "gray"={Sensitivity=gray.drug.sensitivity},
+         "gCSI"={Sensitivity=gCSI.drug.sensitivity})
   Genedf0 <- data.frame(Sensitivity[, drug])
   rownames(Genedf0) <- rownames(Sensitivity)
   colnames(Genedf0)[1] <- "drug"
   if(is.null(tissue))
   {
-    Genedf0[, "Tissue"] <- factor(ccle.tissuetype[rownames(Genedf0), "tissue.type"], ordered=FALSE)
+    Genedf0[, "Tissue"] <- factor(tissueTypes[rownames(Genedf0), "tissue.type"], ordered=FALSE)
     Genedf0 <- Genedf0[complete.cases(Genedf0),]
     Genedf0$Tissue <- factor(Genedf0$Tissue, ordered=FALSE)
     tissues.no <- nrow(table(Genedf0$Tissue))
   }else{
-    CellLines <- rownames(subset(ccle.tissuetype, ccle.tissuetype$tissue.type== tissue))
+    CellLines <- rownames(subset(tissueTypes, tissueTypes$tissue.type== tissue))
     Genedf0 <- subset(Genedf0, rownames(Genedf0) %in% CellLines)
     Genedf0 <- subset(Genedf0, !is.na(Genedf0[,1]))
   }
@@ -457,12 +469,13 @@ fnRunbootstrap <- function (models) {
   M_res <- fnboot(models=boot.models, R=100)
   return(M_res)
 }
-fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sample.no.threshold=5) {
+fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sample.no.threshold=5, drugs) {
   Models <- c("M0", "M1", "M2", "M3", "M3B")
-  drugs <- colnames(ccle.drug.sensitivity)
+  if(is.null(drugs)){drugs <- colnames(ccle.drug.sensitivity)}
   P_values <- list()
   best.isoforms <- character(length=length(drugs))
   statistics <- list()
+  if(stat == "r.squared & cindex"){statistics.cindex <- statistics; P_values.cindex <- P_values}
   #layout(matrix(1:24,6,4))
   i <- 0
   for(drug in drugs)
@@ -482,7 +495,12 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
     names(statistics)[i] <- drug
     
     P_values[[i]][2:nrow(P_values[[i]]),1] <- 0; for(ip in 1:(nrow(P_values[[i]]) -1)){P_values[[i]][ip,(ip+1):ncol(P_values[[i]])] <- 1}
-    
+    if(stat == "r.squared & cindex"){
+      statistics.cindex[[i]] <- statistics[[i]]
+      P_values.cindex[[i]] <- P_values[[i]]
+      names(P_values.cindex)[i] <- drug
+      names(statistics.cindex)[i] <- drug
+    }
     if(!is.null(tissue))
     {
       ccle.sample.no <- 0
@@ -490,7 +508,7 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
       sensitivity.ccle <- ccle.drug.sensitivity[,drug]
       names(sensitivity.ccle) <- rownames(ccle.drug.sensitivity)
       sensitivity.ccle <- sensitivity.ccle[complete.cases(sensitivity.ccle)]
-      tissue.types.ccle <- table(ccle.tissuetype[names(sensitivity.ccle),])
+      tissue.types.ccle <- table(tissueTypes[names(sensitivity.ccle),])
       if (tissue %in% names(tissue.types.ccle))
       {
         ccle.sample.no <- tissue.types.ccle[tissue]
@@ -498,7 +516,7 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
       sensitivity.gdsc <- gdsc.drug.sensitivity[,drug]
       names(sensitivity.gdsc) <- rownames(gdsc.drug.sensitivity)
       sensitivity.gdsc <- sensitivity.gdsc[complete.cases(sensitivity.gdsc)]
-      tissue.types.gdsc <- table(ccle.tissuetype[names(sensitivity.gdsc),])
+      tissue.types.gdsc <- table(tissueTypes[names(sensitivity.gdsc),])
       if (tissue %in% names(tissue.types.gdsc))
       {
         gdsc.sample.no <- tissue.types.gdsc[tissue]
@@ -555,9 +573,52 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
                results <- list(ccle=fnRunbootstrap(models=predictors.ccle),
                                gdsc=fnRunbootstrap(models=predictors.gdsc))
                
+               if((stat == "r.squared") || (stat == "adj.r.squared") || (stat == "cindex") || (stat == "r.squared & cindex")){direction="greater"}else{direction="less"}
+               if(stat == "r.squared & cindex"){
+                 tt <- results
+                 results <- list(ccle=results[["ccle"]][["cindex"]], 
+                                 gdsc=results[["gdsc"]][["cindex"]])
+                 for(j in 1:length(Models))
+                 {
+                   if(length(results$ccle[[Models[j]]]) > 0 & length(results$gdsc[[Models[j]]]) > 0)
+                   {
+                     statistics.cindex[[i]]["mean",Models[j]] <- mean(results$ccle[[Models[j]]]) * weight$ccle + mean(results$gdsc[[Models[j]]]) * weight$gdsc
+                     statistics.cindex[[i]]["median",Models[j]] <- median(results$ccle[[Models[j]]]) * weight$ccle + median(results$gdsc[[Models[j]]]) * weight$gdsc
+                     statistics.cindex[[i]]["min",Models[j]] <- min(results$ccle[[Models[j]]]) * weight$ccle + min(results$gdsc[[Models[j]]]) * weight$gdsc
+                     statistics.cindex[[i]]["max",Models[j]] <- max(results$ccle[[Models[j]]]) * weight$ccle + max(results$gdsc[[Models[j]]]) * weight$gdsc
+                     statistics.cindex[[i]]["var",Models[j]] <- var(results$ccle[[Models[j]]]) * weight$ccle + var(results$gdsc[[Models[j]]]) * weight$gdsc
+                   }
+                 }
+                 
+                 for(j in 1:(length(Models) - 1))
+                 {
+                   for(k in (j + 1):length(Models))
+                   {
+                     if((length(results$ccle[[Models[j]]]) > 0) & 
+                        (length(results$ccle[[Models[k]]]) > 0) & 
+                        (length(results$gdsc[[Models[j]]]) > 0) & 
+                        (length(results$gdsc[[Models[k]]]) > 0)){
+                       
+                       p.value.ccle <- wilcox.test(results$ccle[[Models[k]]] , results$ccle[[Models[j]]], paired=TRUE, alternative=direction)$p.value
+                       p.value.gdsc <- wilcox.test(results$gdsc[[Models[k]]] , results$gdsc[[Models[j]]], paired=TRUE, alternative=direction)$p.value
+                       P_values.cindex[[i]][Models[j],Models[k]] <- p.value.ccle * weight$ccle + p.value.gdsc * weight$gdsc
+                     }
+                     else{
+                       P_values.cindex[[i]][Models[j],Models[k]] <- 1
+                     }
+                     
+                     if(is.na(P_values.cindex[[i]][Models[j],Models[k]])){P_values.cindex[[i]][Models[j],Models[k]]=1}
+                   }
+                   ### For Select Based
+                   P_values.cindex[[i]][Models[j], "M3B"] <- min(ncol(Isoforms$FPKM) * P_values.cindex[[i]][Models[j], "M3B"], 1)
+                 }
+                 results <- tt
+                 results <- list(ccle=results[["ccle"]][["r.squared"]], 
+                                 gdsc=results[["gdsc"]][["r.squared"]])
+               }
                for(j in 1:length(Models))
                {
-                 if(length(results$ccle[[Models[j]]]) > 0)
+                 if(length(results$ccle[[Models[j]]]) > 0 & length(results$gdsc[[Models[j]]]) > 0)
                  {
                    statistics[[i]]["mean",Models[j]] <- mean(results$ccle[[Models[j]]]) * weight$ccle + mean(results$gdsc[[Models[j]]]) * weight$gdsc
                    statistics[[i]]["median",Models[j]] <- median(results$ccle[[Models[j]]]) * weight$ccle + median(results$gdsc[[Models[j]]]) * weight$gdsc
@@ -566,8 +627,6 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
                    statistics[[i]]["var",Models[j]] <- var(results$ccle[[Models[j]]]) * weight$ccle + var(results$gdsc[[Models[j]]]) * weight$gdsc
                  }
                }
-               
-               if((stat == "r.squared") || (stat == "adj.r.squared") || (stat == "cindex")){direction="greater"}else{direction="less"}
                
                for(j in 1:(length(Models) - 1))
                {
@@ -578,8 +637,8 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
                       (length(results$gdsc[[Models[j]]]) > 0) & 
                       (length(results$gdsc[[Models[k]]]) > 0)){
                      
-                     p.value.ccle <- wilcox.test(results$ccle[[Models[k]]] , results$ccle[[Models[j]]], paired=TRUE, alternative=direction)$p.value
-                     p.value.gdsc <- wilcox.test(results$gdsc[[Models[k]]] , results$gdsc[[Models[j]]], paired=TRUE, alternative=direction)$p.value
+                       p.value.ccle <- wilcox.test(results$ccle[[Models[k]]] , results$ccle[[Models[j]]], paired=TRUE, alternative=direction)$p.value
+                       p.value.gdsc <- wilcox.test(results$gdsc[[Models[k]]] , results$gdsc[[Models[j]]], paired=TRUE, alternative=direction)$p.value
                      P_values[[i]][Models[j],Models[k]] <- p.value.ccle * weight$ccle + p.value.gdsc * weight$gdsc
                    }
                    else{
@@ -628,6 +687,22 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
             
             if(sign(predictors.ccle[[Models[j]]]$coefficient) == sign(predictors.gdsc[[Models[j]]]$coefficient)){
               P_values[[i]][j, "M0"] <-  predictors.ccle[[Models[j]]]$coefficient * weight$ccle + predictors.gdsc[[Models[j]]]$coefficient * weight$gdsc
+            }
+          }
+        }
+      }
+      if(stat == "r.squared & cindex"){
+        for(j in 2:length(Models))
+        {
+          P_values.cindex[[i]][j, "M0"] <- 0
+          if(!is.null(predictors.ccle[[Models[j]]]) & !is.null(predictors.gdsc[[Models[j]]]))
+          {
+            if(!is.na(predictors.ccle[[Models[j]]]$coefficient) & !is.na(predictors.gdsc[[Models[j]]]$coefficient))
+            {
+              
+              if(sign(predictors.ccle[[Models[j]]]$coefficient) == sign(predictors.gdsc[[Models[j]]]$coefficient)){
+                P_values.cindex[[i]][j, "M0"] <-  predictors.ccle[[Models[j]]]$coefficient * weight$ccle + predictors.gdsc[[Models[j]]]$coefficient * weight$gdsc
+              }
             }
           }
         }
@@ -635,218 +710,29 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
     }
     
   }
-  return (list(p.values=P_values, statistics=statistics, best.isoforms=best.isoforms))
-}
-fnSensitivityCompareMutCnv <- function (MicroArrayExp, Gene_FPKM, Isoforms, Mutations, CNV, GeneID, sample.no.threshold=5) {
-  Models <- c("M0", "M1", "M2", "M3", "M3B", "MM", "MC")
-  drugs <- colnames(ccle.drug.sensitivity)
-  P_values <- list()
-  best.isoforms <- character(length=length(drugs))
-  statistics <- list()
-  #layout(matrix(1:24,6,4))
-  i <- 0
-  for(drug in drugs)
-  {
-    #print(drug)
-    i <- i + 1
-    names(best.isoforms)[i] <- drug
-    best.isoforms[i] <- "-"
-    
-    P_values[[i]] <- matrix(NA,nrow=length(Models), ncol=length(Models), byrow=FALSE)
-    rownames(P_values[[i]]) <- Models
-    colnames(P_values[[i]]) <- Models
-    names(P_values)[i] <- drug
-    
-    statistics[[i]] <- matrix(0,nrow=5, ncol=length(Models), byrow=FALSE)
-    rownames(statistics[[i]]) <- c("mean", "median", "min", "max", "var")
-    colnames(statistics[[i]]) <- Models
-    names(statistics)[i] <- drug
-    
-    P_values[[i]][2:nrow(P_values[[i]]),1] <- 0; for(ip in 1:(nrow(P_values[[i]]) -1)){P_values[[i]][ip,(ip+1):ncol(P_values[[i]])] <- 1}
-    
-    if(!is.null(tissue))
-    {
-      ccle.sample.no <- 0
-      gdsc.sample.no <- 0
-      sensitivity.ccle <- ccle.drug.sensitivity[,drug]
-      names(sensitivity.ccle) <- rownames(ccle.drug.sensitivity)
-      sensitivity.ccle <- sensitivity.ccle[complete.cases(sensitivity.ccle)]
-      tissue.types.ccle <- table(ccle.tissuetype[names(sensitivity.ccle),])
-      if (tissue %in% names(tissue.types.ccle))
-      {
-        ccle.sample.no <- tissue.types.ccle[tissue]
-      }
-      sensitivity.gdsc <- gdsc.drug.sensitivity[,drug]
-      names(sensitivity.gdsc) <- rownames(gdsc.drug.sensitivity)
-      sensitivity.gdsc <- sensitivity.gdsc[complete.cases(sensitivity.gdsc)]
-      tissue.types.gdsc <- table(ccle.tissuetype[names(sensitivity.gdsc),])
-      if (tissue %in% names(tissue.types.gdsc))
-      {
-        gdsc.sample.no <- tissue.types.gdsc[tissue]
-      }
-    }else{
-      ccle.sample.no <- table(complete.cases(ccle.drug.sensitivity[,drug]))["TRUE"]
-      gdsc.sample.no <- table(complete.cases(gdsc.drug.sensitivity[,drug]))["TRUE"]
-    }
-    
-    if((ccle.sample.no >= sample.no.threshold) & (gdsc.sample.no >= sample.no.threshold))
-    {
-      M0 <- list(ccle=fnCreateNullModel(drug=drug, assay="ccle"), gdsc=fnCreateNullModel(drug=drug, assay="gdsc"))
-      weight <- list(ccle=M0$ccle$n / (M0$ccle$n + M0$gdsc$n), gdsc=M0$gdsc$n / (M0$ccle$n + M0$gdsc$n))
-      
-      if(is.null(MicroArrayExp)) {
-        M1 <- list(ccle=NULL, gdsc=NULL)
-      }else {
-        M1 <- list(ccle=fnCreateGeneModel(drug=drug, nullModel=M0$ccle, data=MicroArrayExp), gdsc=fnCreateGeneModel(drug=drug, nullModel=M0$gdsc, data=MicroArrayExp))
-        if(!is.null(M1$ccle) && !is.null(M1$gdsc)){if(!is.na(M1$ccle$coefficient) && !is.na(M1$gdsc$coefficient)){if(sign(M1$ccle$coefficient) != sign(M1$gdsc$coefficient)){M1$ccle <- NULL; M1$gdsc <- NULL}}}
-      }
-      
-      if(is.null(Gene_FPKM)) {
-        M2 <- list(ccle=NULL, gdsc=NULL)
-      }else {
-        M2 <- list(ccle=fnCreateGeneModel(drug=drug, nullModel=M0$ccle, data=Gene_FPKM), gdsc=fnCreateGeneModel(drug=drug, nullModel=M0$gdsc, data=Gene_FPKM))
-        if(!is.null(M2$ccle) && !is.null(M2$gdsc)){if(!is.na(M2$ccle$coefficient) && !is.na(M2$gdsc$coefficient)){if(sign(M2$ccle$coefficient) != sign(M2$gdsc$coefficient)){M2$ccle <- NULL; M2$gdsc <- NULL}}}
-      }
-      
-      #M3 <- list(ccle=fnCreateIsoformsModel(drug=drug, nullModel=M0$ccle, isoforms=Isoforms), gdsc=fnCreateIsoformsModel(drug=drug, nullModel=M0$gdsc, isoforms=Isoforms))
-      #if(!is.null(M3$ccle) && !is.null(M3$gdsc)){if(!is.na(M3$ccle$coefficient) && !is.na(M3$gdsc$coefficient)){if(sign(M3$ccle$coefficient) != sign(M3$gdsc$coefficient)){M3$ccle <- NULL; M3$gdsc <- NULL}}}
-      M3 <- list(ccle=NULL, gdsc=NULL)
-      
-      if(is.null(Isoforms)) {
-        M3B <- list(ccle=NULL, gdsc=NULL)
-        best.isoforms[i] <- ""
-      }else {
-        M3B <- fnSelectBestIsoform(drug=drug, nullModel=M0, weight, isoforms=Isoforms)
-        best.isoforms[i] <- M3B$best.isoform
-      }
-      
-      if(is.null(Mutations)) {
-        MM <- list(ccle=NULL, gdsc=NULL)
-      }else {
-        MM <- list(ccle=fnCreateGeneModel(drug=drug, nullModel=M0$ccle, data=Mutations), gdsc=fnCreateGeneModel(drug=drug, nullModel=M0$gdsc, data=Mutations))
-        if(!is.null(MM$ccle) && !is.null(MM$gdsc)){if(!is.na(MM$ccle$coefficient) && !is.na(MM$gdsc$coefficient)){if(sign(MM$ccle$coefficient) != sign(MM$gdsc$coefficient)){MM$ccle <- NULL; MM$gdsc <- NULL}}}
-      }
-      
-      if(is.null(CNV)) {
-        MC <- list(ccle=NULL, gdsc=NULL)
-      }else {
-        MC <- list(ccle=fnCreateGeneModel(drug=drug, nullModel=M0$ccle, data=CNV), gdsc=fnCreateGeneModel(drug=drug, nullModel=M0$gdsc, data=CNV))
-        if(!is.null(MC$ccle) && !is.null(MC$gdsc)){if(!is.na(MC$ccle$coefficient) && !is.na(MC$gdsc$coefficient)){if(sign(MC$ccle$coefficient) != sign(MC$gdsc$coefficient)){MC$ccle <- NULL; MC$gdsc <- NULL}}}
-      }
-      #       if(M3B$best.isoform== "")
-      #       {
-      #         M3B$ccle <- M3$ccle
-      #         M3B$gdsc <- M3$gdsc
-      #       }
-      
-      predictors.ccle <- list(M0=M0$ccle, M1=M1$ccle, M2=M2$ccle, M3=M3$ccle, M3B=M3B$ccle, MM=MM$ccle, MC=MC$ccle)
-      predictors.gdsc <- list(M0=M0$gdsc, M1=M1$gdsc, M2=M2$gdsc, M3=M3$gdsc, M3B=M3B$gdsc, MM=MM$gdsc, MC=MC$gdsc)
-      
-      
-      switch(statistical.method,
-             "bootstrap"={
-               
-               results <- list(ccle=fnRunbootstrap(models=predictors.ccle),
-                               gdsc=fnRunbootstrap(models=predictors.gdsc))
-               
-               for(j in 1:length(Models))
-               {
-                 if(length(results$ccle[[Models[j]]]) > 0)
-                 {
-                   statistics[[i]]["mean",Models[j]] <- mean(results$ccle[[Models[j]]]) * weight$ccle + mean(results$gdsc[[Models[j]]]) * weight$gdsc
-                   statistics[[i]]["median",Models[j]] <- median(results$ccle[[Models[j]]]) * weight$ccle + median(results$gdsc[[Models[j]]]) * weight$gdsc
-                   statistics[[i]]["min",Models[j]] <- min(results$ccle[[Models[j]]]) * weight$ccle + min(results$gdsc[[Models[j]]]) * weight$gdsc
-                   statistics[[i]]["max",Models[j]] <- max(results$ccle[[Models[j]]]) * weight$ccle + max(results$gdsc[[Models[j]]]) * weight$gdsc
-                   statistics[[i]]["var",Models[j]] <- var(results$ccle[[Models[j]]]) * weight$ccle + var(results$gdsc[[Models[j]]]) * weight$gdsc
-                 }
-               }
-               
-               if((stat == "r.squared") || (stat == "adj.r.squared") || (stat == "cindex")){direction="greater"}else{direction="less"}
-               
-               for(j in 1:(length(Models) - 1))
-               {
-                 for(k in (j + 1):length(Models))
-                 {
-                   if((length(results$ccle[[Models[j]]]) > 0) & 
-                      (length(results$ccle[[Models[k]]]) > 0) & 
-                      (length(results$gdsc[[Models[j]]]) > 0) & 
-                      (length(results$gdsc[[Models[k]]]) > 0)){
-                     
-                     p.value.ccle <- wilcox.test(results$ccle[[Models[k]]] , results$ccle[[Models[j]]], paired=TRUE, alternative=direction)$p.value
-                     p.value.gdsc <- wilcox.test(results$gdsc[[Models[k]]] , results$gdsc[[Models[j]]], paired=TRUE, alternative=direction)$p.value
-                     P_values[[i]][Models[j],Models[k]] <- p.value.ccle * weight$ccle + p.value.gdsc * weight$gdsc
-                   }
-                   else{
-                     P_values[[i]][Models[j],Models[k]] <- 1
-                   }
-                   
-                   if(is.na(P_values[[i]][Models[j],Models[k]])){P_values[[i]][Models[j],Models[k]]=1}
-                 }
-                 ### For Select Based
-                 P_values[[i]][Models[j], "M3B"] <- min(ncol(Isoforms$FPKM) * P_values[[i]][Models[j], "M3B"], 1)
-               }
-             }, "anova"={
-               for(j in 1:(length(Models) - 1))
-               {
-                 for(k in (j + 1):length(Models))
-                 {
-                   if(!is.null(predictors.ccle[[Models[k]]]$model) & !is.null(predictors.ccle[[Models[j]]]$model)){
-                     
-                     p.value.ccle <- anova(predictors.ccle[[Models[j]]]$model, predictors.ccle[[Models[k]]]$model, test="Chisq")$"Pr(>Chi)"[2]
-                     p.value.gdsc <- anova(predictors.gdsc[[Models[j]]]$model, predictors.gdsc[[Models[k]]]$model, test="Chisq")$"Pr(>Chi)"[2]
-                     if(!is.null(p.value.ccle) & !is.null(p.value.gdsc))
-                     {
-                       P_values[[i]][Models[j],Models[k]] <- p.value.ccle * weight$ccle + p.value.gdsc * weight$gdsc
-                     }else{
-                       P_values[[i]][Models[j],Models[k]] <- 1
-                     }
-                   }
-                   else{
-                     P_values[[i]][Models[j],Models[k]] <- 1
-                   }
-                   if(is.na(P_values[[i]][Models[j],Models[k]])){P_values[[i]][Models[j],Models[k]] <- 1}
-                 }
-                 ### For Select Based
-                 P_values[[i]][Models[j], "M3B"] <- min(ncol(Isoforms$FPKM) * P_values[[i]][Models[j], "M3B"], 1)
-               }
-             })
-      ### save the coefficients of the models for the M1, M2 and M3 in the forst column of the p_value matrix
-      ### I assume that for penalized package there will exist just one isoform after penalization and its coef is reported
-      for(j in 2:length(Models))
-      {
-        P_values[[i]][j, "M0"] <- 0
-        if(!is.null(predictors.ccle[[Models[j]]]) & !is.null(predictors.gdsc[[Models[j]]]))
-        {
-          if(!is.na(predictors.ccle[[Models[j]]]$coefficient) & !is.na(predictors.gdsc[[Models[j]]]$coefficient))
-          {
-            
-            if(sign(predictors.ccle[[Models[j]]]$coefficient) == sign(predictors.gdsc[[Models[j]]]$coefficient)){
-              P_values[[i]][j, "M0"] <-  predictors.ccle[[Models[j]]]$coefficient * weight$ccle + predictors.gdsc[[Models[j]]]$coefficient * weight$gdsc
-            }
-          }
-        }
-      }
-    }
-    
+  if(stat == "r.squared & cindex"){
+    return (list(p.values.r.squared=P_values, p.values.cindex=P_values.cindex, statistics.r.squared=statistics, statistics.cindex=statistics.cindex, best.isoforms=best.isoforms))
   }
   return (list(p.values=P_values, statistics=statistics, best.isoforms=best.isoforms))
 }
 
-fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, assay=c("gray", "ccle", "gdsc"), sample.no.threshold=5) {
+fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, assay=c("gray", "gCSI",  "ccle", "gdsc"), sample.no.threshold=5, drugs) {
   Models <- c("M0", "M1", "M2", "M3", "M3B")
+  if(is.null(drugs)){drugs <- colnames(ccle.drug.sensitivity)}
   P_values <- list()
   statistics <- list()
   #layout(matrix(1:24,6,4))
-  if(assay == "ccle"){Sensitivity <- ccle.drug.sensitivity}else if(assay == "gdsc"){Sensitivity <- gdsc.drug.sensitivity}else if(assay == "gray"){Sensitivity <- gray.drug.sensitivity}
+  if(assay == "ccle"){Sensitivity <- ccle.drug.sensitivity}else if(assay == "gdsc"){Sensitivity <- gdsc.drug.sensitivity}else if(assay == "gray"){Sensitivity <- gray.drug.sensitivity}else if(assay == "gCSI"){Sensitivity <- gCSI.drug.sensitivity}
   drugs_No <- ncol(Sensitivity)
   best.isoforms <- character(length=drugs_No)
   
-  for(i in 1: drugs_No)
+  i <- 0
+  for(drug in drugs)
   {
-    names(best.isoforms)[i] <- gsub("drugid_", "",colnames(Sensitivity)[i])
+    i <- i + 1
+    names(best.isoforms)[i] <- drug
     best.isoforms[i] <- "-"
-    drug <- colnames(Sensitivity)[i]
-    
+
     P_values[[i]] <- matrix(NA,nrow=length(Models), ncol=length(Models), byrow=FALSE)
     rownames(P_values[[i]]) <- Models
     colnames(P_values[[i]]) <- Models
@@ -865,156 +751,7 @@ fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID,
       sensitivity.drug <- Sensitivity[,drug]
       names(sensitivity.drug) <- rownames(Sensitivity)
       sensitivity.drug <- sensitivity.drug[complete.cases(sensitivity.drug)]
-      tissue.types.ccle <- table(ccle.tissuetype[names(sensitivity.drug),])
-      if (tissue %in% names(tissue.types.ccle))
-      {
-        sample.no <- tissue.types.ccle[tissue]
-      }
-    }else{
-      sample.no <- table(complete.cases(Sensitivity[,drug]))["TRUE"]
-    }
-    
-    
-    if(sample.no >= sample.no.threshold)
-    {
-      M0 <- fnCreateNullModel(drug=drug, assay=assay)
-      if(is.null(MicroArrayExp)) {
-        M1 <- NULL
-      }else{
-        M1 <- fnCreateGeneModel(drug=drug, nullModel=M0, data=MicroArrayExp)
-      }
-      if(is.null(Gene_FPKM)) {
-        M2 <- NULL
-      }else{
-        M2 <- fnCreateGeneModel(drug=drug, nullModel=M0, data=Gene_FPKM)
-      }
-      #M3 <- fnCreateIsoformsModel(drug=drug, nullModel=M0, isoforms=Isoforms)
-      M3 <- NULL
-      if(is.null(Isoforms)) {
-        M3B <- NULL
-        best.isoforms[i] <- ""
-      }else{
-        M3B <- fnSelectBestIsoformOneDataSet(drug=drug, nullModel=M0, weight, isoforms=Isoforms, assay=assay)
-        best.isoforms[i] <- M3B$best.isoform
-      }
-      
-      #        if(M3B$best.isoform == "")
-      #        {
-      #            M3B <- M3
-      #        }
-      
-      predictors <- list(M0=M0, M1=M1, M2=M2, M3=M3, M3B=M3B$best.model)
-      
-      
-      switch(statistical.method,
-             "bootstrap"={
-               
-               results <- fnRunbootstrap(models=predictors)
-               
-               for(j in 1:length(Models))
-               {
-                 if(length(results[[Models[j]]]) > 0)
-                 {
-                   statistics[[i]]["mean",Models[j]] <- mean(results[[Models[j]]])
-                   statistics[[i]]["median",Models[j]] <- median(results[[Models[j]]])
-                   statistics[[i]]["min",Models[j]] <- min(results[[Models[j]]])
-                   statistics[[i]]["max",Models[j]] <- max(results[[Models[j]]])
-                   statistics[[i]]["var",Models[j]] <- var(results[[Models[j]]])
-                 }
-               }
-               
-               if((stat== "r.squared") || (stat== "adj.r.squared") || (stat== "cindex")){direction="greater"}else{direction="less"}
-               
-               for(j in 1:(length(Models) - 1))
-               {
-                 for(k in (j + 1):length(Models))
-                 {
-                   if((length(results[[Models[j]]]) > 0) &(length(results[[Models[k]]]) > 0)){
-                     
-                     p.value <- wilcox.test(results[[Models[k]]] , results[[Models[j]]], paired=TRUE, alternative=direction)$p.value
-                     P_values[[i]][Models[j],Models[k]] <- p.value
-                   }
-                   else{
-                     P_values[[i]][Models[j],Models[k]] <- 1
-                   }
-                   
-                   if(is.na(P_values[[i]][Models[j],Models[k]])){P_values[[i]][Models[j],Models[k]] <- 1}
-                 }
-                 ### For Select Based
-                 P_values[[i]][Models[j], "M3B"] <- min(ncol(Isoforms$FPKM) * P_values[[i]][Models[j], "M3B"], 1)
-               }
-             }, "anova"={
-               for(j in 1:(length(Models) - 1))
-               {
-                 for(k in (j + 1):length(Models))
-                 {
-                   if(!is.null(predictors[[Models[k]]]$model) & !is.null(predictors[[Models[j]]]$model)){
-                     
-                     p.value <- anova(predictors[[Models[j]]]$model, predictors[[Models[k]]]$model, test="Chisq")$"Pr(>Chi)"[2]
-                     
-                     P_values[[i]][Models[j],Models[k]] <- p.value
-                   }
-                   else{
-                     P_values[[i]][Models[j],Models[k]] <- 1
-                   }
-                   if(is.na(P_values[[i]][Models[j],Models[k]])){P_values[[i]][Models[j],Models[k]] <- 1}
-                 }
-                 ### For Select Based
-                 P_values[[i]][Models[j], "M3B"] <- min(ncol(Isoforms$FPKM) * P_values[[i]][Models[j], "M3B"], 1)
-               }
-             })
-      ### save the coefficients of the models for the M1, M2 and M3 in the forst column of the p_value matrix
-      ### I assume that for penalized package there will exist just one isoform after penalization and its coef is reported
-      for(j in 2:length(Models))
-      {
-        P_values[[i]][j, "M0"] <- 0
-        if(!is.null(predictors[[Models[j]]]))
-        {
-          if(!is.na(predictors[[Models[j]]]$coefficient))
-          {
-            P_values[[i]][j, "M0"] <-  predictors[[Models[j]]]$coefficient
-          }
-        }
-      }
-    }
-    
-  }
-  return (list(p.values=P_values, statistics=statistics, best.isoforms=best.isoforms))
-}
-fnSensitivityOneDataSetMutCnv <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, assay=c("gray", "ccle", "gdsc"), sample.no.threshold=5) {
-  Models <- c("M0", "M1", "M2", "M3", "M3B", "MM", "MC")
-  P_values <- list()
-  statistics <- list()
-  #layout(matrix(1:24,6,4))
-  if(assay == "ccle"){Sensitivity <- ccle.drug.sensitivity}else if(assay == "gdsc"){Sensitivity <- gdsc.drug.sensitivity}else if(assay == "gray"){Sensitivity <- gray.drug.sensitivity}
-  drugs_No <- ncol(Sensitivity)
-  best.isoforms <- character(length=drugs_No)
-  
-  for(i in 1: drugs_No)
-  {
-    names(best.isoforms)[i] <- gsub("drugid_", "",colnames(Sensitivity)[i])
-    best.isoforms[i] <- "-"
-    drug <- colnames(Sensitivity)[i]
-    
-    P_values[[i]] <- matrix(NA,nrow=length(Models), ncol=length(Models), byrow=FALSE)
-    rownames(P_values[[i]]) <- Models
-    colnames(P_values[[i]]) <- Models
-    names(P_values)[i] <- drug
-    
-    statistics[[i]] <- matrix(0,nrow=5, ncol=length(Models), byrow=FALSE)
-    rownames(statistics[[i]]) <- c("mean", "median", "min", "max", "var")
-    colnames(statistics[[i]]) <- Models
-    names(statistics)[i] <- drug
-    
-    P_values[[i]][2:nrow(P_values[[i]]),1] <- 0; for(ip in 1:(nrow(P_values[[i]]) -1)){P_values[[i]][ip,(ip+1):ncol(P_values[[i]])] <- 1}
-    
-    if(!is.null(tissue) & assay != "gray")
-    {
-      sample.no <- 0
-      sensitivity.drug <- Sensitivity[,drug]
-      names(sensitivity.drug) <- rownames(Sensitivity)
-      sensitivity.drug <- sensitivity.drug[complete.cases(sensitivity.drug)]
-      tissue.types.ccle <- table(ccle.tissuetype[names(sensitivity.drug),])
+      tissue.types.ccle <- table(tissueTypes[names(sensitivity.drug),])
       if (tissue %in% names(tissue.types.ccle))
       {
         sample.no <- tissue.types.ccle[tissue]
@@ -1137,7 +874,7 @@ fnSensitivityOneDataSetMutCnv <- function (MicroArrayExp, Gene_FPKM, Isoforms, G
 
 sensitivity.method <- as.character(args[3])# c("auc_published", "auc_recomputed", "slope_recomputed", "ic50_published", "ic50_recomputed")
 RNA_seq.normalize <- as.character(args[6])# c(TRUE,FALSE)
-training.method <- as.character(args[7]) # c("ccle_gdsc", "gray", "ccle", "gdsc")
+training.method <- as.character(args[7]) # c("ccle_gdsc", "gray", "ccle", "gdsc", "gCSI")
 model.method <- as.character(args[8])# c("glm", "npreg", "penalized")
 glm.family <- as.character(args[9])# c("binomial", "gaussian")
 tissue <- NULL
@@ -1145,86 +882,151 @@ if(as.character(args[10]) != "all") {tissue <- as.character(args[10])} #c(NULL, 
 output.folder <- as.character(args[11]) #output folder
 
 statistical.method <- "bootstrap" #c("anova", "crossvalidation", "bootstrap")
-stat <- "adj.r.squared" #c("", "adj.r.squared", "r.squared", "rmsd", "cindex")
+stat <- "r.squared & cindex" #c("adj.r.squared", "r.squared", "rmsd", "cindex","r.squared & cindex")
 
 #sensitivity.method <- "cls";RNA_seq.normalize <- FALSE;training.method <- "ccle_gdsc";model.method <- "glm";glm.family <- "gaussian";tissue <- NULL
-if(training.method== "ccle_gdsc") {
-  ##Restrict analyses to common cells
-  #   common <- PharmacoGx::intersectPSet(pSets=list("CCLE"=CCLE, "GDSC"=GDSC), strictIntersect=FALSE)
-  #   cells <- intersect(common$CCLE@cell$cellid, pData(common$CCLE@molecularProfiles$isoforms)[, "cellid"])
-  #   common$CCLE@molecularProfiles$rnaseq <- CCLE@molecularProfiles$rnaseq[, rownames(pData(CCLE@molecularProfiles$isoforms))]
-  #   CCLE <- common$CCLE
-  #   GDSC <- common$GDSC
-  drugs <- intersect(PharmacoGx::drugNames(CCLE), PharmacoGx::drugNames(GDSC))
-}
-###for test
-#ccle.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=CCLE, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
-#drugs <- orderDrugs(data=ccle.drug.sensitivity, metric="var", no=10)
-#drugs <-   c("TAE684", "PLX4720", "Crizotinib", "lapatinib", "Erlotinib")
-####
-ccle.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=CCLE, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
-gdsc.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GDSC, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
-
-if(as.character(sensitivity.method)== "slope_recomputed") {
-  ##manual cutoff for sensitivity calls based on slope
-  cutoff <- 0.27
-  res.weight <- as.integer(args[4]); sens.weight <- as.integer(args[5]);
-  #res.weight <- 1;sens.weight <- 10
-  ccle.drug.sensitivity.wighted <- ccle.drug.sensitivity
-  ccle.drug.sensitivity.wighted[ccle.drug.sensitivity.wighted < cutoff] <- res.weight
-  ccle.drug.sensitivity.wighted[ccle.drug.sensitivity.wighted >= cutoff] <- sens.weight
+load("/mnt/work1/users/bhklab/Users/zhaleh/ensembl.map.genes.isoforms.GRCh38.87.RData", verbose=TRUE)
+if(training.method != "gCSI") {
+  load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE.CTRPv2.RData", verbose=TRUE)
+  CCLE <- CCLE.CTRPv2
+  #load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE_hs.RData", verbose=TRUE)
+  annotation(CCLE@molecularProfiles$rnaseq) <- "rna"
+  annotation(CCLE@molecularProfiles$isoforms) <- "rna"
+  load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC1000.RData", verbose=TRUE)
+  GDSC <- GDSC1000
+  #load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC.RData", verbose=TRUE)
+  if(training.method== "ccle_gdsc") {
+    ##Restrict analyses to common cells
+    #   common <- PharmacoGx::intersectPSet(pSets=list("CCLE"=CCLE, "GDSC"=GDSC), strictIntersect=FALSE)
+    #   cells <- intersect(common$CCLE@cell$cellid, pData(common$CCLE@molecularProfiles$isoforms)[, "cellid"])
+    #   common$CCLE@molecularProfiles$rnaseq <- CCLE@molecularProfiles$rnaseq[, rownames(pData(CCLE@molecularProfiles$isoforms))]
+    #   CCLE <- common$CCLE
+    #   GDSC <- common$GDSC
+    drugs <- intersect(PharmacoGx::drugNames(CCLE), PharmacoGx::drugNames(GDSC))
+  }
   
-  gdsc.drug.sensitivity.wighted <- gdsc.drug.sensitivity
-  gdsc.drug.sensitivity.wighted[gdsc.drug.sensitivity.wighted < cutoff] <- res.weight
-  gdsc.drug.sensitivity.wighted[gdsc.drug.sensitivity.wighted >= cutoff] <- sens.weight
+  ###for test
+  #ccle.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=CCLE, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
+  #drugs <- orderDrugs(data=ccle.drug.sensitivity, metric="var", no=10)
+  #drugs <-   c("TAE684", "PLX4720", "Crizotinib", "lapatinib", "Erlotinib")
+  ####
+  ccle.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=CCLE, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
+  gdsc.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GDSC, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
   
-  ccle.drug.sensitivity <- ccle.drug.sensitivity.wighted * ccle.drug.sensitivity
-  gdsc.drug.sensitivity <- gdsc.drug.sensitivity.wighted * gdsc.drug.sensitivity
-}
-ccle.tissuetype <- as.data.frame(CCLE@cell[, "tissueid"], row.names=CCLE@cell[, "cellid"])
-colnames(ccle.tissuetype) <- "tissue.type"
+  if(as.character(sensitivity.method)== "slope_recomputed") {
+    ##manual cutoff for sensitivity calls based on slope
+    cutoff <- 0.27
+    res.weight <- as.integer(args[4]); sens.weight <- as.integer(args[5]);
+    #res.weight <- 1;sens.weight <- 10
+    ccle.drug.sensitivity.wighted <- ccle.drug.sensitivity
+    ccle.drug.sensitivity.wighted[ccle.drug.sensitivity.wighted < cutoff] <- res.weight
+    ccle.drug.sensitivity.wighted[ccle.drug.sensitivity.wighted >= cutoff] <- sens.weight
+    
+    gdsc.drug.sensitivity.wighted <- gdsc.drug.sensitivity
+    gdsc.drug.sensitivity.wighted[gdsc.drug.sensitivity.wighted < cutoff] <- res.weight
+    gdsc.drug.sensitivity.wighted[gdsc.drug.sensitivity.wighted >= cutoff] <- sens.weight
+    
+    ccle.drug.sensitivity <- ccle.drug.sensitivity.wighted * ccle.drug.sensitivity
+    gdsc.drug.sensitivity <- gdsc.drug.sensitivity.wighted * gdsc.drug.sensitivity
+  }
+  ccle.tissuetype <- as.data.frame(CCLE@cell[, "tissueid"], row.names=CCLE@cell[, "cellid"])
+  colnames(ccle.tissuetype) <- "tissue.type"
+  tissueTypes <- ccle.tissuetype
+  
+  ###
+  features <- fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"]
+  features <- intersect(fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"], features)
+  
+  rnaseq.features <- rownames(fData(CCLE@molecularProfiles$rnaseq))[which(fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"] %in% features)]
+  isoforms.features <- rownames(fData(CCLE@molecularProfiles$isoforms))[which(fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"] %in% features)]
+  
+  ccle.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="rnaseq", features=rnaseq.features, fill.missing=FALSE)))
+  ccle.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="isoforms", features=isoforms.features, fill.missing=FALSE)))
+  ccle.isoforms.fpkm[which(is.na(ccle.isoforms.fpkm))] <- 0
+  
+  ccle.cells <- intersectList(rownames(ccle.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
+  gdsc.cells <- intersectList(rownames(gdsc.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
+  
+  GeneList <- colnames(ccle.genes.fpkm)
+  GeneListn <- length(GeneList)
+  
+  # if(RNA_seq.normalize == FALSE)
+  # {
+  #   ccle.genes.fpkm <- 2 ^ ccle.genes.fpkm - 1
+  #   ccle.isoforms.fpkm <- 2 ^ ccle.isoforms.fpkm -1
+  # }
+  if(RNA_seq.normalize == TRUE)
+  {
+    ccle.genes.fpkm <- log2(ccle.genes.fpkm + 1)
+    ccle.isoforms.fpkm <- log2(ccle.isoforms.fpkm + 1)
+  }
+  
+  ## for logistic regression
+  
+  if(glm.family == "binomial")
+  {
+    for(c in colnames(ccle.drug.sensitivity)){ccle.drug.sensitivity[,c] <- factor(ccle.drug.sensitivity[, c])}
+    for(c in colnames(gdsc.drug.sensitivity)){gdsc.drug.sensitivity[,c] <- factor(gdsc.drug.sensitivity[, c])}
+  }
+}else{
+  load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/gCSI_hs.RData", verbose=TRUE)
+  drugs <- PharmacoGx::drugNames(gCSI)
+  gCSI.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=gCSI, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
 
+  if(as.character(sensitivity.method)== "slope_recomputed") {
+    ##manual cutoff for sensitivity calls based on slope
+    cutoff <- 0.27
+    res.weight <- as.integer(args[4]); sens.weight <- as.integer(args[5]);
+    #res.weight <- 1;sens.weight <- 10
+    gCSI.drug.sensitivity.wighted <- gCSI.drug.sensitivity
+    gCSI.drug.sensitivity.wighted[gCSI.drug.sensitivity.wighted < cutoff] <- res.weight
+    gCSI.drug.sensitivity.wighted[gCSI.drug.sensitivity.wighted >= cutoff] <- sens.weight
+    
+    gCSI.drug.sensitivity <- gCSI.drug.sensitivity.wighted * gCSI.drug.sensitivity
+  }
+  gCSI.tissuetype <- as.data.frame(gCSI@cell[, "tissueid"], row.names=rownames(gCSI@cell))
+  colnames(gCSI.tissuetype) <- "tissue.type"
+  tissueTypes <- gCSI.tissuetype
+  
+  features <- fData(gCSI@molecularProfiles$rnaseq)[,"EnsemblGeneId"]
+  features <- intersect(fData(gCSI@molecularProfiles$isoforms)[,"EnsemblGeneId"], features)
+  
+  rnaseq.features <- rownames(fData(CCLE@molecularProfiles$rnaseq))[which(fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"] %in% features)]
+  isoforms.features <- rownames(fData(CCLE@molecularProfiles$isoforms))[which(fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"] %in% features)]
+  
+  gCSI.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=gCSI, mDataType="rnaseq", features=rnaseq.features, fill.missing=FALSE)))
+  gCSI.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=gCSI, mDataType="isoforms", features=isoforms.features, fill.missing=FALSE)))
+  gCSI.isoforms.fpkm[which(is.na(gCSI.isoforms.fpkm))] <- 0
+  
+  gCSI.cells <- intersectList(rownames(gCSI.drug.sensitivity), rownames(gCSI.genes.fpkm), rownames(gCSI.isoforms.fpkm))
 
-###
-features <- fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"]
-features <- intersect(fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"], features)
-
-rnaseq.features <- rownames(fData(CCLE@molecularProfiles$rnaseq))[match(features, fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"])]
-isoforms.features <- rownames(fData(CCLE@molecularProfiles$isoforms))[match(features, fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"])]
-
-ccle.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="rnaseq", features=rnaseq.features, fill.missing=FALSE)))
-ccle.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="isoforms", features=isoforms.features, fill.missing=FALSE)))
-ccle.isoforms.fpkm[which(is.na(ccle.isoforms.fpkm))] <- 0
-
-ccle.cells <- intersectList(rownames(ccle.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
-gdsc.cells <- intersectList(rownames(gdsc.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
-
-GeneList <- colnames(ccle.genes.fpkm)
-GeneListn <- length(GeneList)
-
-# if(RNA_seq.normalize == FALSE)
-# {
-#   ccle.genes.fpkm <- 2 ^ ccle.genes.fpkm - 1
-#   ccle.isoforms.fpkm <- 2 ^ ccle.isoforms.fpkm -1
-# }
-if(RNA_seq.normalize == TRUE)
-{
-  ccle.genes.fpkm <- log2(ccle.genes.fpkm + 1)
-  ccle.isoforms.fpkm <- log2(ccle.isoforms.fpkm + 1)
-}
-
-## for logistic regression
-
-if(glm.family == "binomial")
-{
-  for(c in colnames(ccle.drug.sensitivity)){ccle.drug.sensitivity[,c] <- factor(ccle.drug.sensitivity[, c])}
-  for(c in colnames(gdsc.drug.sensitivity)){gdsc.drug.sensitivity[,c] <- factor(gdsc.drug.sensitivity[, c])}
+  GeneList <- colnames(gCSI.genes.fpkm)
+  GeneListn <- length(GeneList)
+  
+  # if(RNA_seq.normalize == FALSE)
+  # {
+  #   gCSI.genes.fpkm <- 2 ^ gCSI.genes.fpkm - 1
+  #   gCSI.isoforms.fpkm <- 2 ^ gCSI.isoforms.fpkm -1
+  # }
+  if(RNA_seq.normalize == TRUE)
+  {
+    gCSI.genes.fpkm <- log2(gCSI.genes.fpkm + 1)
+    gCSI.isoforms.fpkm <- log2(gCSI.isoforms.fpkm + 1)
+  }
+  
+  ## for logistic regression
+  
+  if(glm.family == "binomial")
+  {
+    for(c in colnames(gCSI.drug.sensitivity)){gCSI.drug.sensitivity[,c] <- factor(gCSI.drug.sensitivity[, c])}
+  }
 }
 startIndex <- as.integer(args[1])
 finishIndex <- as.integer(args[2])
 ###for test
 #MicroArrayExp=NULL;Gene_FPKM=ccle.genes.fpkm[,Gene];Isoforms=fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene);Mutations=ccle.mutation[,Gene];CNV=ccle.cnv[,Gene];GeneID=Gene
 #GeneList <-   c("ENSG00000171094", "ENSG00000157764", "ENSG00000141736", "ENSG00000146648")
+#drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib")
 #startIndex <- 1;finishIndex <- length(GeneList)
 ####
 #print(c(sensitivity.method,RNA_seq.normalize, training.method, model.method, glm.family, tissue, res.weight, sens.weight, output.folder))
@@ -1232,15 +1034,17 @@ finishIndex <- as.integer(args[2])
 pvalues <- list()
 statistics <- list()
 best.isoforms <- list()
+pvalues.r.squared <- pvalues.cindex <- pvalues
+statistics.r.squared <- statistics.cindex <- statistics
 
 for(i in startIndex: finishIndex)
 {
-  #Gene <- ENSG00000171094 ALK drug:TAE684 expression is supposed to be predictive
-  #Gene <- ENSG00000171094 ALK drug:Crizotinib expression is supposed to be predictive
-  #Gene <- ENSG00000157764 BRAF drug:PLX4720 mutation is supposed to be predictive
-  #Gene <- ENSG00000141736 ERBB2 drug:lapatinib expression is supposed to be predictive
-  #Gene <- ENSG00000146648 EGFR drug:lapatinib expression is supposed to be predictive
-  #Gene <- ENSG00000146648 EGFR drug:Erlotinib expression is supposed to be predictive
+  #Gene <- "ENSG00000171094" ALK drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib") expression is supposed to be predictive to TAE684
+  #Gene <- ENSG00000171094 ALK c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib")  expression is supposed to be predictive to Crizotinib
+  #Gene <- "ENSG00000157764" BRAF drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib")  mutation is supposed to be predictive to PLX4720
+  #Gene <- "ENSG00000141736" ERBB2 drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib") expression is supposed to be predictive to lapatinib
+  #Gene <- "ENSG00000146648" EGFR drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib")   expression is supposed to be predictive to Erlotinib
+  #Gene <- "ENSG00000146648" EGFR drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib")  expression is supposed to be predictive to Erlotinib
   #Gene <-  "ENSG00000181019" "1728" #NQO1 "3480" #IGF1R
   #Gene <- "ENSG00000148426" "C10orf47"
   #MicroArrayExp <- ccle.drug.microarray.exp[,Gene]; Gene_FPKM <- ccle.genes.fpkm[,Gene]; Isoforms <- fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene); GeneID <- Gene;  model.method <- "npreg"; method <- "bootstrap"; stat <- "adj.r.squared";glm.family <- "gaussian"; tissue <- NULL; sample.no.threshold <- 5; assay <- "ccle"
@@ -1252,7 +1056,14 @@ for(i in startIndex: finishIndex)
     sensitivity <- fnSensitivityCompare(MicroArrayExp=NULL,
                                               Gene_FPKM=ccle.genes.fpkm[,Gene],
                                               Isoforms=fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene),
-                                              GeneID=Gene)
+                                              GeneID=Gene,
+                                              drugs=drugs)
+  }else if(training.method == "gCSI"){
+    sensitivity <- fnSensitivityOneDataSet(MicroArrayExp=NULL,
+                                           Gene_FPKM= gCSI.genes.fpkm[,Gene],
+                                           Isoforms=fnIsoformsExp(Isoforms_FPKM=gCSI.isoforms.fpkm, GeneId=Gene),
+                                           GeneID=Gene,
+                                           assay=training.method)
   }else{
     sensitivity <- fnSensitivityOneDataSet(MicroArrayExp=NULL,
                                            Gene_FPKM= ccle.genes.fpkm[,Gene],
@@ -1260,23 +1071,27 @@ for(i in startIndex: finishIndex)
                                            GeneID=Gene,
                                            assay=training.method)
   }
-  pvalues[[Gene]] <- sensitivity$p.values
-  statistics[[Gene]] <- sensitivity$statistics
-  best.isoforms[[Gene]] <- sensitivity$best.isoforms
-  
-  
-  
+  if(stat == "r.squared & cindex") {
+    pvalues.r.squared[[Gene]] <- sensitivity$p.values.r.squared
+    pvalues.cindex[[Gene]] <- sensitivity$p.values.cindex
+    statistics.r.squared[[Gene]] <- sensitivity$statistics.r.squared
+    statistics.cindex[[Gene]] <- sensitivity$statistics.cindex
+    best.isoforms[[Gene]] <- sensitivity$best.isoforms
+  }else{
+    pvalues[[Gene]] <- sensitivity$p.values
+    statistics[[Gene]] <- sensitivity$statistics
+    best.isoforms[[Gene]] <- sensitivity$best.isoforms
+  }
   print(sprintf("Models of Gene %s [%d] is built at %s", Gene, i, Sys.time()))
 }
-
-
-both.drug.association.adj.r.squared.pvalues <- pvalues
-both.drug.association.statistics <- statistics
+if(stat == "r.squared & cindex") {
+  both.drug.association.adj.r.squared.pvalues <- list("r.squared"=pvalues.r.squared, "cindex"=pvalues.cindex)
+  both.drug.association.statistics <- list("r.squared"=statistics.r.squared, "cindex"=statistics.cindex)
+}else{
+  both.drug.association.adj.r.squared.pvalues <- pvalues
+  both.drug.association.statistics <- statistics
+}  
 both.drug.association.best.isoforms <- best.isoforms
 path.result <- file.path(output.folder)
 save(both.drug.association.adj.r.squared.pvalues, both.drug.association.statistics,both.drug.association.best.isoforms, file=file.path(path.result ,paste0(paste(as.character(startIndex),as.character(finishIndex),sep="_"), ".RData")))
-
-
-ccle.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="rna", features=isoforms.features, fill.missing=FALSE)))
-
 

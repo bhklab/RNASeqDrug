@@ -1,52 +1,42 @@
-fnIsoforms_of_Gene <- function(Gene_Map = ensembl.map.genes.isoforms, GeneId)
-{
+## return all the isoforms of GeneId according to ensembl.map.genes.isoforms annotation provided to the function
+fnIsoforms_of_Gene <- function(Gene_Map = ensembl.map.genes.isoforms, GeneId) {
   return(data.frame(strsplit(Gene_Map[,as.character(GeneId)],",")))
 }
-stacked.barplot.models.ranges <- function(model, 
-                                          isoforms_No = c("1.isoform","n.isoforms","all"), 
-                                          prototype, 
-                                          main.title, 
-                                          breakpoint, 
-                                          yaxis = c("Regular", "Log")) #breakpoit Regular or the point in y axis where should be gapped
-{
+## plot a bar plot of all modeles in which each model's bar height is showing the number of 
+## significant biomarkers caught by that model
+#breakpoint c("Regular" ,"No", any number) 
+barplot.models <- function(model, isoforms_No = c("1.isoform","n.isoforms","all"), prototype, main.title, breakpoint,  yaxis = c("Regular", "Log"), cex=1.1) {
   models.NO <- length(prototype)
-  stacked.barplot.matrix <- matrix(NA, nrow=length(ranges.names) , ncol=(models.NO * drugs_No))
-  models.drugs.names <- expand.grid(gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)),prototype)
-  colnames(stacked.barplot.matrix) <- paste(models.drugs.names[,1],models.drugs.names[,2],sep ="_")
+  barplot.matrix <- matrix(NA, nrow=1 , ncol=(drugs_No * models.NO))
+  models.drugs.names <- expand.grid(prototype,gsub("drugid_", "", colnames(ccle.drug.sensitivity.ordered)))
+  colnames(barplot.matrix) <- paste(models.drugs.names[,2], models.drugs.names[,1], sep ="_")
   for(i in 1:drugs_No)
   {
     for(j in 1:models.NO)
     {
-      matrix.index <- paste(gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)[i]),prototype[j],sep ="_")
+      matrix.index <- paste(gsub("drugid_", "", colnames(ccle.drug.sensitivity.ordered)[i]), prototype[j], sep ="_")
       if(isoforms_No != "all")
       {
-        for(l in 1:length(ranges.names))
-        {
-          stacked.barplot.matrix[length(ranges.names)-l+1,matrix.index] <- model[[DOI[i]]][[prototype[j]]][isoforms_No,ranges.names[l]]
-        }
+        barplot.matrix[1,matrix.index] <- model[[DOI[i]]][[prototype[j]]][isoforms_No, "positive"] + model[[DOI[i]]][[prototype[j]]][isoforms_No, "negative"]
       }else{
-        for(l in 1:length(ranges.names))
-        {
-          stacked.barplot.matrix[length(ranges.names)-l+1,matrix.index] <- sum(model[[DOI[i]]][[prototype[j]]][,ranges.names[l]])
-        }
+        barplot.matrix[1,matrix.index] <- sum(model[[DOI[i]]][[prototype[j]]][, "positive"]) + sum(model[[DOI[i]]][[prototype[j]]][, "negative"])
       }
     }
   }
   
   Glabels <- gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered))
-  Legends <- Models.names[prototype]
   if(breakpoint == "Regular")
   {
-    File <- file.path(path.diagrams, sprintf("Stacked_BarPlot_ranges_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
-    ylabels <- mystacked.barplot(Filename = File, data = stacked.barplot.matrix, barsNo = models.NO, stackedNo = length(ranges.names), groupNo = drugs_No, group.labels = Glabels, ylab.label = "Number of Associated Genes", legend.lables= Legends, main.label = main.title, yaxis)
+    File <- file.path(path.diagrams, sprintf("BarPlot_%s_%s.pdf", isoforms_No, str_replace_all(main.title, "[^[:alnum:]]","")))    
+    mybarplot(Filename=File, data=barplot.matrix, barsNo=models.NO, groupNo=drugs_No, group.labels=Glabels, ylab.label="Number of Associated Genes", legend.lables=Models.names[prototype], main.label=main.title, yaxis=yaxis, cex=cex) 
   }else{
-    File <- file.path(path.diagrams, sprintf("Stacked_Gapped_BarPlot_ranges_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
-    mystacked.gap.barplot(Filename = File, data = stacked.barplot.matrix, barsNo = models.NO, stackedNo = length(ranges.names), groupNo = drugs_No, group.labels = Glabels, ylab.label = "Number of Associated Genes", legend.lables= Legends, main.label = main.title, breakpoint)
+    File <- file.path(path.diagrams, sprintf("Gapped_BarPlot_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
+    mybarplot.gap(Filename=File, data=barplot.matrix, barsNo=models.NO, group.labels=Glabels,ylab.label="Number of Associated Genes", legend.lables=Models.names[prototype], main.label=main.title, breakpoint) 
   }
-  return (ylabels)
 }
-stacked.barplot.models <- function(model, isoforms_No = c("1.isoform","n.isoforms","all"), prototype, main.title, breakpoint)
-{
+## plot a bar plot of all modeles in which each model's bar is divided to two parts for 
+## positive and negative significant biomarkers caught by that model
+stacked.barplot.models <- function(model, isoforms_No = c("1.isoform","n.isoforms","all"), prototype, main.title, breakpoint) {
   models.NO <- length(prototype)
   stacked.barplot.matrix <- matrix(NA, nrow=2 , ncol=(models.NO * drugs_No))
   models.drugs.names <- expand.grid(gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)),prototype)
@@ -81,38 +71,47 @@ stacked.barplot.models <- function(model, isoforms_No = c("1.isoform","n.isoform
   }
   
 }
-barplot.models <- function(model, isoforms_No = c("1.isoform","n.isoforms","all"), prototype, main.title, breakpoint,  yaxis = c("Regular", "Log")) #breakpoint c("Regular" ,"No", any number)
-{
+## plot a bar plot of all the models in which each density of color of each bar is changing according to the 
+## strenght of the stat (cinde or r squared) of the significant biomarkers in that model
+#breakpoit Regular or the point in y axis where should be gapped
+stacked.barplot.models.ranges <- function(model, isoforms_No = c("1.isoform","n.isoforms","all"), prototype, main.title, breakpoint, yaxis = c("Regular", "Log"), cex=1.1) {
   models.NO <- length(prototype)
-  barplot.matrix <- matrix(NA, nrow=1 , ncol=(drugs_No * models.NO))
-  models.drugs.names <- expand.grid(prototype,gsub("drugid_", "", colnames(ccle.drug.sensitivity.ordered)))
-  colnames(barplot.matrix) <- paste(models.drugs.names[,2], models.drugs.names[,1], sep ="_")
+  stacked.barplot.matrix <- matrix(NA, nrow=length(ranges.names) , ncol=(models.NO * drugs_No))
+  models.drugs.names <- expand.grid(gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)),prototype)
+  colnames(stacked.barplot.matrix) <- paste(models.drugs.names[,1],models.drugs.names[,2],sep ="_")
   for(i in 1:drugs_No)
   {
     for(j in 1:models.NO)
     {
-      matrix.index <- paste(gsub("drugid_", "", colnames(ccle.drug.sensitivity.ordered)[i]), prototype[j], sep ="_")
+      matrix.index <- paste(gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)[i]),prototype[j],sep ="_")
       if(isoforms_No != "all")
       {
-        barplot.matrix[1,matrix.index] <- model[[DOI[i]]][[prototype[j]]][isoforms_No, "positive"] + model[[DOI[i]]][[prototype[j]]][isoforms_No, "negative"]
+        for(l in 1:length(ranges.names))
+        {
+          stacked.barplot.matrix[length(ranges.names)-l+1,matrix.index] <- model[[DOI[i]]][[prototype[j]]][isoforms_No,ranges.names[l]]
+        }
       }else{
-        barplot.matrix[1,matrix.index] <- sum(model[[DOI[i]]][[prototype[j]]][, "positive"]) + sum(model[[DOI[i]]][[prototype[j]]][, "negative"])
+        for(l in 1:length(ranges.names))
+        {
+          stacked.barplot.matrix[length(ranges.names)-l+1,matrix.index] <- sum(model[[DOI[i]]][[prototype[j]]][,ranges.names[l]])
+        }
       }
     }
   }
   
   Glabels <- gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered))
+  Legends <- Models.names[prototype]
   if(breakpoint == "Regular")
   {
-    File <- file.path(path.diagrams, sprintf("BarPlot_%s_%s.pdf", isoforms_No, str_replace_all(main.title, "[^[:alnum:]]","")))    
-    mybarplot(Filename=File, data=barplot.matrix, barsNo=models.NO, groupNo=drugs_No, group.labels=Glabels, ylab.label="Number of Associated Genes", legend.lables=Models.names[prototype], main.label=main.title, yaxis=yaxis) 
+    File <- file.path(path.diagrams, sprintf("Stacked_BarPlot_ranges_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
+    ylabels <- mystacked.barplot(Filename = File, data = stacked.barplot.matrix, barsNo = models.NO, stackedNo = length(ranges.names), groupNo = drugs_No, group.labels = Glabels, ylab.label = "Number of Associated Genes", legend.lables= Legends, main.label = main.title, yaxis, cex)
   }else{
-    File <- file.path(path.diagrams, sprintf("Gapped_BarPlot_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
-    mybarplot.gap(Filename=File, data=barplot.matrix, barsNo=models.NO, group.labels=Glabels,ylab.label="Number of Associated Genes", legend.lables=Models.names[prototype], main.label=main.title, breakpoint) 
+    File <- file.path(path.diagrams, sprintf("Stacked_Gapped_BarPlot_ranges_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
+    mystacked.gap.barplot(Filename = File, data = stacked.barplot.matrix, barsNo = models.NO, stackedNo = length(ranges.names), groupNo = drugs_No, group.labels = Glabels, ylab.label = "Number of Associated Genes", legend.lables= Legends, main.label = main.title, breakpoint)
   }
+  return (ylabels)
 }
-fnVennDiagramTriple <- function(model, m3=c("M3","M3B","M3P"))
-{
+fnVennDiagramTriple <- function(model, m3=c("M3","M3B","M3P")) {
   pdf(file = file.path(path.diagrams, paste0(Models.names[which(Models == m3)],"Microarray_RNASeq_Venn.pdf")),height=48, width=32)
   gl <- grid.layout(nrow=6, ncol=4)
   pushViewport(viewport(layout=gl))
@@ -133,8 +132,7 @@ fnVennDiagramTriple <- function(model, m3=c("M3","M3B","M3P"))
   }
   dev.off()
 }
-fnVennDiagramPair <- function(model, m3=c("M3","M3B","M3P"))
-{
+fnVennDiagramPair <- function(model, m3=c("M3","M3B","M3P")) {
   pdf(file = file.path(path.diagrams, paste0(Models.names[which(Models == m3)],"_RNASeq_Pair_Venn.pdf")),height=48, width=32)
   gl <- grid.layout(nrow=6, ncol=4)
   pushViewport(viewport(layout=gl))
@@ -155,8 +153,7 @@ fnVennDiagramPair <- function(model, m3=c("M3","M3B","M3P"))
   }
   dev.off()
 }
-fnFancystat<- function(FDR, combinations, signed)
-{
+fnFancystat<- function(FDR, combinations, signed) {
   ## Fancy Statistics
   ##Comparison of RNA-seq and Microarray regarding to the number of genes with FDR less than FDR cutoff
   statistics <- list()
@@ -235,8 +232,7 @@ fnFancystat<- function(FDR, combinations, signed)
   dev.off()
   return(statistics)  
 }
-fnCuttOffs<-function(cutoff_statistics, combination)
-{
+fnCuttOffs<-function(cutoff_statistics, combination) {
   m1 <- unlist(strsplit(combination,"_"))[1]
   m2 <- unlist(strsplit(combination,"_"))[2]
   pdf(file = file.path(path.diagrams, paste0(paste(Models.names[which(Models==m2)] , Models.names[which(Models==m1)] , sep= "_vs_"),"_Cutoff_Statistics.pdf")), height=7, width=14)
@@ -249,8 +245,7 @@ fnCuttOffs<-function(cutoff_statistics, combination)
   title(paste(Models.names[which(Models==m2)] , Models.names[which(Models==m1)] , sep= " vs "))
   dev.off()
 }
-fnWilcox <- function(model, signed)
-{
+fnWilcox <- function(model, signed) {
   W <- matrix(NA,nrow=length(Models), ncol=length(Models), byrow=FALSE)
   rownames(W) <- Models
   colnames(W) <- Models
@@ -301,9 +296,8 @@ fnWilcox <- function(model, signed)
   return(list(comparison = W))
   
 }
-
-associations.all.drugs <-function(model.rank, annot.ensembl.all.genes)
-{
+##report all the associations in a list of objets where each object is for one drug
+associations.all.drugs <-function(model.rank, annot.ensembl.all.genes) {
   rr <- NULL
   col.names <- c(".estimate",".pvalue",paste0(".",adjustment.method))
   
@@ -333,11 +327,12 @@ associations.all.drugs <-function(model.rank, annot.ensembl.all.genes)
     table_write_dt[,"n"] <- nrow(Genedf0[complete.cases(Genedf0),])
     table_write_dt[,"isoform"] <- best.isoforms.matrix[,gsub("drugid_","",drug)]
     table_write_dt[,"isoform.exp"] <- mean.ccle.isoforms.fpkm[best.isoforms.matrix[,gsub("drugid_","",drug)]]
-    table_write_dt[,"gene.R2"] <- statistics.matrix[,paste(gsub("drugid_","",drug),"M2",sep ="_")]
-    table_write_dt[,"isoform.R2"] <- statistics.matrix[,paste(gsub("drugid_","",drug),"M3B",sep ="_")]
+    table_write_dt[,"isoform.no"] <-  isoforms_No_List[rownames(table_write_dt), 1]
+    table_write_dt[,sprintf("gene.%s",stat)] <- statistics.matrix[,paste(gsub("drugid_","",drug),"M2",sep ="_")]
+    table_write_dt[,sprintf("isoform.%s",stat)] <- statistics.matrix[,paste(gsub("drugid_","",drug),"M3B",sep ="_")]
     
-    table_write_dt <- cbind(table_write_dt$symbol, table_write_dt$n, table_write_dt[,models.col.names], table_write_dt$isoform, table_write_dt$isoform.exp, table_write_dt$gene.R2, table_write_dt$isoform.R2)
-    colnames(table_write_dt) <- c("symbol","n",models.col.names,"isoform","isoform.exp","gene.R2","isoform.R2")
+    table_write_dt <- cbind(table_write_dt$symbol, table_write_dt$n, table_write_dt[,models.col.names], table_write_dt$isoform, table_write_dt$isoform.exp, table_write_dt[, sprintf("gene.%s",stat)], table_write_dt[,sprintf("isoform.%s",stat)])
+    colnames(table_write_dt) <- c("symbol","n",models.col.names,"isoform","isoform.exp",sprintf("gene.%s",stat),sprintf("isoform.%s",stat))
     ### Order based on pvalues of best isoform method
     table_write_dt <- table_write_dt[order(table_write_dt[,rank]),]
     
@@ -347,8 +342,7 @@ associations.all.drugs <-function(model.rank, annot.ensembl.all.genes)
   return(rr)
   
 }
-associations.all.drugs.significant <-function(rank, method=c("isoform","gene"), cutoff=.01, R2_cut=.6, exp_cut=1, annot.ensembl.all.genes)
-{
+associations.all.drugs.significant <-function(rank, method=c("isoform","gene"), cutoff=.01, R2_cut=.6, exp_cut=1, annot.ensembl.all.genes) {
   rr <- NULL
   col.names = c(".estimate",".pvalue",paste0(".",adjustment.method))
   
@@ -379,17 +373,17 @@ associations.all.drugs.significant <-function(rank, method=c("isoform","gene"), 
     table_write_dt[,"n"] <- nrow(Genedf0[complete.cases(Genedf0),])
     table_write_dt[,"isoform"] <- best.isoforms.matrix[,gsub("drugid_","",colnames(ccle.drug.sensitivity)[i])]
     table_write_dt[,"isoform.exp"] <- mean.ccle.isoforms.fpkm[best.isoforms.matrix[,gsub("drugid_","",colnames(ccle.drug.sensitivity)[i])]]
-    table_write_dt[,"gene.R2"] <- statistics.matrix[,paste(gsub("drugid_","",colnames(ccle.drug.sensitivity)[i]),"M2",sep ="_")]
-    table_write_dt[,"isoform.R2"] <- statistics.matrix[,paste(gsub("drugid_","",colnames(ccle.drug.sensitivity)[i]),"M3B",sep ="_")]
-    table_write_dt <- cbind(table_write_dt$symbol, table_write_dt$n, table_write_dt[,models.col.names], table_write_dt$isoform, table_write_dt$isoform.exp, table_write_dt$gene.R2, table_write_dt$isoform.R2)
-    colnames(table_write_dt) <- c("symbol","n",models.col.names,"isoform","isoform.exp","gene.R2","isoform.R2")
+    table_write_dt[,sprintf("gene.%s",stat)] <- statistics.matrix[,paste(gsub("drugid_","",colnames(ccle.drug.sensitivity)[i]),"M2",sep ="_")]
+    table_write_dt[,sprintf("isoform.%s",stat)] <- statistics.matrix[,paste(gsub("drugid_","",colnames(ccle.drug.sensitivity)[i]),"M3B",sep ="_")]
+    table_write_dt <- cbind(table_write_dt$symbol, table_write_dt$n, table_write_dt[,models.col.names], table_write_dt$isoform, table_write_dt$isoform.exp, table_write_dt[,sprintf("gene.%s",stat)], table_write_dt[,sprintf("isoform.%s",stat)])
+    colnames(table_write_dt) <- c("symbol","n",models.col.names,"isoform","isoform.exp",sprintf("gene.%s",stat),sprintf("isoform.%s",stat))
     
     if(method == "isoform")
     {
       table_write_dt <- subset(table_write_dt,  
                                 table_write_dt[,sprintf("%s.%s",Models.names[2],adjustment.method)]==1 & 
                                 table_write_dt[,sprintf("%s.%s",Models.names[3],adjustment.method)] < cutoff & 
-                                table_write_dt[,"isoform.R2"] > R2_cut & 
+                                table_write_dt[,sprintf("isoform.%s",stat)] > R2_cut & 
                                 #&  table_write_dt[,sprintf("%s.estimate",Models.names[3])] > 0 &  
                                 table_write_dt[,"isoform.exp"] > exp_cut)
     }else if(method == "gene")
@@ -405,8 +399,7 @@ associations.all.drugs.significant <-function(rank, method=c("isoform","gene"), 
   return(rr)
   
 }
-Check.KnownAssociations <- function(associations)
-{
+Check.KnownAssociations <- function(associations) {
   #FirtsLetter <-  tolower(unlist(strsplit(Models.names[which(Models==rank.model)],split=""))[1])
   known.associations <- read.csv(file = file.path(path.data,"KnownAssociations.csv"),stringsAsFactors = FALSE)
   for (i in 1:nrow(known.associations))
@@ -420,8 +413,7 @@ Check.KnownAssociations <- function(associations)
   }
   write.csv(known.associations, file = file.path(path.diagrams,"KnownAssociations.csv"))
 }
-Check.KnownAssociations.PLOS1 <- function(associations)
-{
+Check.KnownAssociations.PLOS1 <- function(associations) {
   #FirtsLetter <-  tolower(unlist(strsplit(Models.names[which(Models==rank.model)],split=""))[1])
   known.associations <- read.csv(file = file.path(path.data,"Table_S4.csv"),stringsAsFactors = FALSE)
   for (i in 1:nrow(known.associations))
@@ -438,8 +430,7 @@ Check.KnownAssociations.PLOS1 <- function(associations)
   }
   write.csv(known.associations, file = file.path(path.diagrams,"KnownAssociations_PLOS1.csv"))
 }
-fnComputeAssociateGenes <- function(FDR_CutOff = 0.01, signed)
-{
+fnComputeAssociateGenes <- function(FDR_CutOff = 0.01, signed) {
   N.Isoforms <- rownames(subset(isoforms_No_List,isoforms.NO > 1))
   One.Isoforms <- rownames(subset(isoforms_No_List,isoforms.NO == 1))
   M <- list()
@@ -582,8 +573,7 @@ fnComputeAssociateGenes <- function(FDR_CutOff = 0.01, signed)
   }
   return(M)
 }
-fnComputeAssociateGenes.stat <- function(FDR_CutOff = 0.01, stat_CutOff = 0.6, signed)
-{
+fnComputeAssociateGenes.stat <- function(FDR_CutOff = 0.01, stat_CutOff = 0.6, signed) {
   N.Isoforms <- rownames(subset(isoforms_No_List,isoforms.NO > 1))
   One.Isoforms <- rownames(subset(isoforms_No_List,isoforms.NO == 1))
   M <- list()
@@ -725,8 +715,7 @@ fnComputeAssociateGenes.stat <- function(FDR_CutOff = 0.01, stat_CutOff = 0.6, s
   }
   return(M)
 }
-fnComputeAssociateGenes.stat.range <- function(FDR_CutOff = 0.01, biomarkers.sign = c("positive","negative","all"))
-{
+fnComputeAssociateGenes.stat.range <- function(FDR_CutOff = 0.01, biomarkers.sign = c("positive","negative","all")) {
   switch(biomarkers.sign, "positive"= {sign.condition = "sign > 0"}, "negative"= {sign.condition = "sign < 0"}, "all"= {sign.condition = "sign > -2"})
   
   N.Isoforms <- rownames(subset(isoforms_No_List,isoforms.NO > 1))
@@ -818,9 +807,7 @@ fnComputeAssociateGenes.stat.range <- function(FDR_CutOff = 0.01, biomarkers.sig
   
   return(M)
 }
-
-fnMarkersPercent <- function(model, m1, m2)
-{
+fnMarkersPercent <- function(model, m1, m2) {
   barplot.colors <- c("indianred3","steelblue3","palegreen3", "mediumpurple3","darkorange3")
   Filename <- file.path(path.diagrams, paste0("MarkersPercent.pdf"))
   pdf(file = Filename, height=7, width=14)
@@ -836,8 +823,7 @@ fnMarkersPercent <- function(model, m1, m2)
   dev.off()
   
 }
-fnIsoformVSGeneR2 <- function(FDR_CutOff = 0.01, m1 ,m2)
-{
+fnIsoformVSGeneR2 <- function(FDR_CutOff = 0.01, m1 ,m2) {
   index.fdr <- NULL
   exp <- expand.grid(c(m1,m2,paste(m1,m2,sep="_")),gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)))
   M1 <- matrix(NA, nrow(FDR_List), ncol = 3 * drugs_No)
@@ -879,7 +865,7 @@ fnIsoformVSGeneR2 <- function(FDR_CutOff = 0.01, m1 ,m2)
   
   Filename <- file.path(path.diagrams, paste0("MarkersPercentBoxPlot.pdf"))
   pdf(file = Filename, height=7, width=14)
-  boxplot(M1, main="Isoforms vs Genes", xaxt="n", ylab="R2",cex.axis= 0.7, las=2,col = c("blue","red","purple"))
+  boxplot(M1, main="Isoforms vs Genes", xaxt="n", ylab=stat,cex.axis= 0.7, las=2,col = c("blue","red","purple"))
   
   text(seq(2,ncol(ccle.drug.sensitivity.ordered)*3,by=3), par("usr")[3], labels = gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)), srt = 45, adj = c(1.1,1.1), xpd = TRUE, cex=.7) 
   legend("topleft", legend = c("Gene specific","Isoform specific","Common genes"), fill = c("blue","red","purple"), bty="n")
@@ -888,8 +874,7 @@ fnIsoformVSGeneR2 <- function(FDR_CutOff = 0.01, m1 ,m2)
   
   
 }
-fnIsoformVSGeneExp <- function(FDR_CutOff = 0.01, m1 ,m2)
-{
+fnIsoformVSGeneExp <- function(FDR_CutOff = 0.01, m1 ,m2) {
   index.fdr <- NULL
   exp <- expand.grid(c(m1,m2,paste(m1,m2,sep="_")),gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)))
   M1 <- matrix(NA, nrow(FDR_List), ncol = 3 * drugs_No)
@@ -941,9 +926,7 @@ fnIsoformVSGeneExp <- function(FDR_CutOff = 0.01, m1 ,m2)
   
   
 }
-
-fnSensitivity.tissue <- function (gene, isoform, drug)
-{
+fnSensitivity.tissue <- function (gene, isoform, drug) {
   sensitivity.ccle <- ccle.drug.sensitivity[,drug]
   sensitivity.ccle <- sensitivity[complete.cases(sensitivity.ccle)]
   tissue.types.ccle <- table(ccle.drug.tissuetype[names(sensitivity.ccle),])
@@ -1031,8 +1014,7 @@ fnSensitivity.tissue <- function (gene, isoform, drug)
   }
   return (list(p.values = Pvalues.tissue, statistics = statistics.tissue, tissues = tissue.types))
 }
-associations.all.drugs.tissues.significant <-function(associations,cut_off)
-{
+associations.all.drugs.tissues.significant <-function(associations,cut_off) {
   rrr <- NULL
   for(i in 1:length(associations))
   {
@@ -1082,7 +1064,7 @@ associations.all.drugs.tissues.significant <-function(associations,cut_off)
               rr[[tissue]][index,"Microarray.estimate_ccle"] <- fnsensitivity.tissues.ccle$p.values[[k]]["M1","M0"]
               rr[[tissue]][index,"Genes.estimate_ccle"] <- fnsensitivity.tissues.ccle$p.values[[k]]["M2","M0"]        
               rr[[tissue]][index,"Isoforms.estimate_ccle"] <- fnsensitivity.tissues.ccle$p.values[[k]]["M3B","M0"] 
-              rr[[tissue]][index,"R2_ccle"] <- fnsensitivity.tissues.ccle$statistics[[k]]["median","M3B"]
+              rr[[tissue]][index,sprintf("%s_ccle",stat)] <- fnsensitivity.tissues.ccle$statistics[[k]]["median","M3B"]
               rr[[tissue]][index,"n_ccle"] <- fnsensitivity.tissues.ccle$tissues[tissue]
               rr[[tissue]][index,"symbol_ccle"] <- as.character(associations[[i]][j,"symbol_ccle"])
               rr[[tissue]][index,"isoform_ccle"] <- as.character(associations[[i]][j,"isoform_ccle"])
@@ -1095,7 +1077,7 @@ associations.all.drugs.tissues.significant <-function(associations,cut_off)
                 rr[[tissue]][index,"Microarray.estimate_gdsc"] <- fnsensitivity.tissues.gdsc$p.values[[k2]]["M1","M0"]
                 rr[[tissue]][index,"Genes.estimate_gdsc"] <- fnsensitivity.tissues.gdsc$p.values[[k2]]["M2","M0"]        
                 rr[[tissue]][index,"Isoforms.estimate_gdsc"] <- fnsensitivity.tissues.gdsc$p.values[[k2]]["M3B","M0"]
-                rr[[tissue]][index,"R2_gdsc"] <- fnsensitivity.tissues.gdsc$statistics[[k2]]["median","M3B"]
+                rr[[tissue]][index,sprintf("%s_gdsc",stat)] <- fnsensitivity.tissues.gdsc$statistics[[k2]]["median","M3B"]
                 rr[[tissue]][index,"n_gdsc"] <- fnsensitivity.tissues.gdsc$tissues[tissue]
                 rr[[tissue]][index,"isoform_gdsc"] <- as.character(associations[[i]][j,"isoform_gdsc"])
                 rr[[tissue]][index,"isoform.exp_gdsc"] <- as.character(associations[[i]][j,"isoform.exp_gdsc"])
@@ -1118,7 +1100,7 @@ associations.all.drugs.tissues.significant <-function(associations,cut_off)
               rr[[tissue]][index,"Microarray.estimate_ccle"] <- fnsensitivity.tissues.ccle$p.values[[k]]["M1","M0"]
               rr[[tissue]][index,"Genes.estimate_ccle"] <- fnsensitivity.tissues.ccle$p.values[[k]]["M2","M0"]        
               rr[[tissue]][index,"Isoforms.estimate_ccle"] <- fnsensitivity.tissues.ccle$p.values[[k]]["M3B","M0"] 
-              rr[[tissue]][index,"R2_ccle"] <- fnsensitivity.tissues.ccle$statistics[[k]]["median","M3B"]
+              rr[[tissue]][index,sprintf("%s_ccle",stat)] <- fnsensitivity.tissues.ccle$statistics[[k]]["median","M3B"]
               rr[[tissue]][index,"n_ccle"] <- fnsensitivity.tissues.ccle$tissues[tissue]
               rr[[tissue]][index,"symbol_ccle"] <- as.character(associations[[i]][j,"symbol_ccle"])
               rr[[tissue]][index,"isoform_ccle"] <- as.character(associations[[i]][j,"isoform_ccle"])
@@ -1137,8 +1119,7 @@ associations.all.drugs.tissues.significant <-function(associations,cut_off)
   }
   return(rrr)
 }
-associations.top.biomarkers.tissues <-function(gene, isoform, drug, specificity = c("gene","isoform","common"))
-{
+associations.top.biomarkers.tissues <-function(gene, isoform, drug, specificity = c("gene","isoform","common")) {
   file.expressions <- "ccle_drug_both_exp_ensembl.RData"
   load(file.path(path.data,file.expressions), verbose = T)
   
@@ -1173,14 +1154,14 @@ associations.top.biomarkers.tissues <-function(gene, isoform, drug, specificity 
   }
   return(rr)
 }
-fnTop.significant.biomarkers <- function(associations, cut_off=.01, BioNo=50, rank.type=c("pvalue", "pvalue.adj"))# BioNo = "all" or Number of biomarkers
-{
+# BioNo = "all" or Number of biomarkers 
+fnTop.significant.biomarkers <- function(associations, cut_off=.01, BioNo=50, rank.type=c("pvalue", "pvalue.adj")){
   rr <- list()
   
   for(i in 1:length(associations))
   {
     significant_table <- data.frame(matrix(NA, ncol=10, nrow=nrow(associations[[i]])))
-    colnames(significant_table) <- c("symbol", "biomarker.id", "type", "specificity", "estimate", "R2", adjustment.method, "pvalue", "rank", "delta.rank")
+    colnames(significant_table) <- c("symbol", "biomarker.id", "type", "specificity", "estimate", stat, adjustment.method, "pvalue", "rank", "delta.rank")
     rownames(significant_table) <- rownames(associations[[i]])
     significant_table$symbol <- associations[[i]]$symbol
     significant_table$biomarker.id <- associations[[i]]$symbol
@@ -1196,7 +1177,7 @@ fnTop.significant.biomarkers <- function(associations, cut_off=.01, BioNo=50, ra
     
     
     significant_table$estimate <- associations[[i]]$Genes.estimate
-    significant_table$R2 <- associations[[i]]$gene.R2
+    significant_table[,stat] <- associations[[i]][,sprintf("gene.%s",stat)]
     significant_table[, adjustment.method] <- associations[[i]][, paste0("Genes.", adjustment.method)]
     significant_table$pvalue <- associations[[i]]$Genes.pvalue
     
@@ -1206,7 +1187,7 @@ fnTop.significant.biomarkers <- function(associations, cut_off=.01, BioNo=50, ra
     significant_table$isoforms.no <- isoforms_No_List[rownames(significant_table),1]
     
     temp <- data.frame(matrix(NA, ncol=10, nrow=nrow(associations[[i]])))
-    colnames(temp) <- c("symbol","biomarker.id","type","specificity","estimate","R2",adjustment.method, "pvalue","rank","delta.rank")
+    colnames(temp) <- c("symbol","biomarker.id","type","specificity","estimate",stat,adjustment.method, "pvalue","rank","delta.rank")
     rownames(temp) <- rownames(associations[[i]])
     temp$symbol <- associations[[i]]$symbol
     temp$biomarker.id <- associations[[i]]$isoform
@@ -1221,7 +1202,7 @@ fnTop.significant.biomarkers <- function(associations, cut_off=.01, BioNo=50, ra
     }
     
     temp$estimate <- associations[[i]]$Isoforms.estimate
-    temp$R2 <- associations[[i]]$isoform.R2
+    temp[,stat] <- associations[[i]][,sprintf("isoform.%s",stat)]
     temp[, adjustment.method] <- associations[[i]][, paste0("Isoforms.", adjustment.method)]
     temp$pvalue <- associations[[i]]$Isoforms.pvalue
     
@@ -1278,81 +1259,89 @@ fnTop.significant.biomarkers <- function(associations, cut_off=.01, BioNo=50, ra
   }
   return(rr)
 }
-
-fnExtractFeautures <- function(associations, cut_off = .01, BioNo = 50)# BioNo = "all" or Number of biomarkers
-{
+fnTop.significant.biomarkers.all.types <- function(associations, cut_off=.01, rank.type=c("pvalue", "pvalue.adj")) {
   rr <- list()
   
   for(i in 1:length(associations))
   {
-    significant_table <- data.frame(matrix(NA, ncol = 9, nrow = nrow(associations[[i]])))
-    colnames(significant_table) <- c("symbol","biomarker.id","type","specificity","estimate","R2",adjustment.method,"rank","delta.rank")
-    rownames(significant_table) <- rownames(associations[[i]])
-    significant_table$symbol <- associations[[i]]$symbol
-    significant_table$biomarker.id <- associations[[i]]$symbol
-    significant_table$type <- "gene"
-    significant_table[rownames(subset(associations[[i]], associations[[i]][, paste0("Genes.", adjustment.method)] < cut_off & associations[[i]][, paste0("Isoforms.", adjustment.method)] >= cut_off)), "specificity"] <- "gene.specific"
-    significant_table[rownames(subset(associations[[i]], associations[[i]][, paste0("Genes.", adjustment.method)] < cut_off & associations[[i]][, paste0("Isoforms.", adjustment.method)] < cut_off)), "specificity"] <- "common"
-    significant_table$estimate <- associations[[i]]$Genes.estimate
-    significant_table$R2 <- associations[[i]]$gene.R2
-    significant_table[ , adjustment.method] <- associations[[i]][, paste0("Genes.", adjustment.method)]
-    significant_table$gene.id <- rownames(associations[[i]])
-    significant_table$transcript.id <- associations[[i]]$isoform
+    tt <- cbind("type"=NA, "pvalue"=NA, "pvalue.adj"=NA, associations[[i]])
     
-    significant_table$isoforms.no <- isoforms_No_List[rownames(significant_table),1]
-    
-    temp <- data.frame(matrix(NA, ncol = 9, nrow = nrow(associations[[i]])))
-    colnames(temp) <- c("symbol","biomarker.id","type","specificity","estimate","R2",adjustment.method,"rank","delta.rank")
-    rownames(temp) <- rownames(associations[[i]])
-    temp$symbol <- associations[[i]]$symbol
-    temp$biomarker.id <- associations[[i]]$isoform
-    temp$type <- "isoform"
-    temp[rownames(subset(associations[[i]], associations[[i]][, paste0("Isoforms.", adjustment.method)] < cut_off & associations[[i]][, paste0("Genes.", adjustment.method)] >= cut_off)), "specificity"] <- "isoform.specific"
-    temp[rownames(subset(associations[[i]], associations[[i]][, paste0("Isoforms.", adjustment.method)] < cut_off & associations[[i]][, paste0("Genes.", adjustment.method)] < cut_off)), "specificity"] <- "common"
-    temp$estimate <- associations[[i]]$Isoforms.estimate
-    temp$R2 <- associations[[i]]$isoform.R2
-    temp[ , adjustment.method] <- associations[[i]][, paste0("Isoforms.", adjustment.method)]
-    temp$isoforms.no <- isoforms_No_List[rownames(temp),1]
-    temp$gene.id <- rownames(associations[[i]])
-    temp$transcript.id <- associations[[i]]$isoform
-    
-    
-    significant_table <- rbind(significant_table,temp)
-    rownames(significant_table) <- 1:nrow(significant_table)
-    significant_table <- significant_table[order(significant_table[,adjustment.method]),]
-    significant_table$rank <- 1:nrow(significant_table)    
-    significant_table$delta.rank <- 0
-    
-    
-    if(BioNo != "all")
-    {
-      for ( j in 1: BioNo)
-      {
-        temp <- subset(significant_table, significant_table$symbol == significant_table[j,"symbol"])
-        significant_table[j,"delta.rank"] <- abs(temp[1,"rank"] - temp[2,"rank"])
-      }
-      significant_table <- significant_table[which(significant_table[ , adjustment.method] < cut_off), , drop=FALSE]
-      last <- ifelse(nrow(significant_table) < BioNo,  nrow(significant_table), BioNo)
-    }else{
-      significant.NO <- nrow(significant_table[which(significant_table[ , adjustment.method] < cut_off), , drop=FALSE])
-      
-      for ( j in 1: significant.NO)
-      {
-        temp <- subset(significant_table, significant_table$symbol == significant_table[j,"symbol"])
-        significant_table[j,"delta.rank"] <- abs(temp[1,"rank"] - temp[2,"rank"])
-      }
-      significant_table <- significant_table[which(significant_table[ , adjustment.method] < cut_off), , drop=FALSE]
-      
-      last <- nrow(significant_table)
-    }
-    
-    #last <- ifelse(nrow(significant_table) < BioNo,  nrow(significant_table), BioNo)
-    rr[[names(associations)[i]]] <- significant_table[1:last,]
+    xx <- ifelse(rank.type == "pvalue.adj", adjustment.method, "pvalue")
+    gene.col <- paste0("Genes.", xx)
+    isoform.col <- paste0("Isoforms.", xx)
+    mut.col <- paste0("Mutations.", xx) 
+    cnv.col <- paste0("CNV.", xx)
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "gene"
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "gene & isoform"
+    tt[which(tt[, gene.col] < cut_off &
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "gene & mutation"
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "gene & cnv"
+    tt[which(tt[, gene.col] >= cut_off &
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "isoform"
+    tt[which(tt[, gene.col] >= cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "isoform & mutation"
+    tt[which(tt[, gene.col] >= cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "isoform & cnv"
+    tt[which(tt[, gene.col] >= cut_off & 
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "mutation"
+    tt[which(tt[, gene.col] >= cut_off & 
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "mutation & cnv"
+    tt[which(tt[, gene.col] >= cut_off & 
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "cnv"
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] >= cut_off), "type"] <- "gene & isoform & mutation"
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] >= cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "gene & isoform & cnv"
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] >= cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "gene & mutation & cnv"
+    tt[which(tt[, gene.col] >= cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "isoform & mutation & cnv"
+    tt[which(tt[, gene.col] < cut_off & 
+               tt[, isoform.col] < cut_off &
+               tt[, mut.col] < cut_off &
+               tt[, cnv.col] < cut_off), "type"] <- "all"
+    tt <- tt[which(!is.na(tt[,"type"])), , drop=FALSE]
+    cc <- grep(".pvalue$", colnames(tt))
+    tt[,"pvalue"] <- apply(tt, 1, function(x){min(as.numeric(x[cc]))})
+    cc <- grep(adjustment.method, colnames(tt))
+    tt[,"pvalue.adj"] <- apply(tt, 1, function(x){min(as.numeric(x[cc]))})
+    tt <- tt[order(tt[,rank.type]),]
+    rr[[names(associations)[i]]] <- tt
   }
   return(rr)
 }
-fnPercentageBiomarkersType <- function(associations)
-{
+fnPercentageBiomarkersType <- function(associations) {
   percentage.biomarkers.type <- matrix(0, ncol=length(gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered))), nrow = 3)
   colnames(percentage.biomarkers.type) <- gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered))
   rownames(percentage.biomarkers.type) <- c("isoform.specific","common","gene.specific")
@@ -1368,11 +1357,11 @@ fnPercentageBiomarkersType <- function(associations)
     percentage.biomarkers.type["common",i] <- ifelse(is.na(round((type.table["common"]/sum(type.table))*100,digit=0)), 0, round((type.table["common"]/sum(type.table))*100,digit=0))
     
     if(sum(percentage.biomarkers.type[,i]) < 100){percentage.biomarkers.type["common",i] <- percentage.biomarkers.type["common",i] + 100 - sum(percentage.biomarkers.type[,i])}
+    if(sum(percentage.biomarkers.type[,i]) > 100){percentage.biomarkers.type["common",i] <- 100 - sum(percentage.biomarkers.type[c(1,3),i])}
   }
   return(percentage.biomarkers.type)
 }
-fnGeneIsoformCorrelation <- function(biomarkers)
-{
+fnGeneIsoformCorrelation <- function(biomarkers) {
   exp <- expand.grid(c("common","gene.specific","isoform.specific"),gsub("drugid_","",colnames(ccle.drug.sensitivity.ordered)))
   cor.gene.isoform <- matrix(NA,  ncol = 3 * drugs_No, nrow = max(sapply(biomarkers,function(x){nrow(x)})))
   colnames(cor.gene.isoform) <- paste(exp[,2],exp[,1],sep="_")
@@ -1418,9 +1407,7 @@ fnGeneIsoformCorrelation <- function(biomarkers)
   
   dev.off()
 }
-
-fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
-{
+fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE) {
   
   rr <- list()
   for(i in 1:length(biomarkers))
@@ -1433,8 +1420,8 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
       for(j in 1:nrow(significant_table))
       {
         tissue.pvalue <- 1
-        tissue.R2 <- -100
-        tissue.R2.boot <- -100
+        tissue.stat <- -100
+        tissue.stat.boot <- -100
         gene.id <- as.character(significant_table[j, "gene.id"])
         transcript.id <- as.character(significant_table[j, "transcript.id"])
         switch(training.type, "CCLE_GDSC"= {
@@ -1446,16 +1433,16 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
             M2 <- list(ccle = fnCreateGeneModel(drug = Drugs_ToCheck, nullModel = M0$ccle, data = ccle.genes.fpkm[,gene.id]), 
                         gdsc = fnCreateGeneModel(drug = Drugs_ToCheck, nullModel = M0$gdsc, data = ccle.genes.fpkm[, gene.id]))
             
-            if(!is.null(M2$ccle) && !is.null(M2$gdsc)){if(!is.na(M2$ccle$coefficient) && !is.na(M2$gdsc$coefficient)){if(sign(M2$ccle$coefficient) != sign(M2$gdsc$coefficient)){M2$ccle <- NULL; M2$gdsc <- NULL}}}
+            if(!is.null(M2$ccle) && !is.null(M2$gdsc)){if(!is.na(M2$ccle$coefficient) && !is.na(M2$gdsc$coefficient)){if((sign(M2$ccle$coefficient) != sign(M2$gdsc$coefficient)) || M2$ccle$coefficient == 0 || M2$gdsc$coefficient == 0){M2$ccle <- NULL; M2$gdsc <- NULL}}}
             if(!is.null(M2$ccle) && !is.null(M2$gdsc))
             {
-              ccle.R2 <- compute.R2(M2$ccle$dataset$drug, fitted(M2$ccle$model))
-              gdsc.R2 <- compute.R2(M2$gdsc$dataset$drug, fitted(M2$gdsc$model))
+              ccle.stat <- compute.stat(stat, yi=M2$ccle$dataset$drug, y.hat=fitted(M2$ccle$model))
+              gdsc.stat <- compute.stat(stat, yi=M2$gdsc$dataset$drug, y.hat=fitted(M2$gdsc$model))
               
               if(nrow(summary(M2$ccle$model)$coefficients) == 2){ ccle.pvalue <- summary(M2$ccle$model)$coefficients[2, 4]} else{ ccle.pvalue <- 1}
               if(nrow(summary(M2$gdsc$model)$coefficients) == 2){ gdsc.pvalue <- summary(M2$gdsc$model)$coefficients[2, 4]} else{ gdsc.pvalue <- 1}
               
-              tissue.R2 <- ccle.R2 * weight$ccle + gdsc.R2 * weight$gdsc
+              tissue.stat <- ifelse(!is.na(ccle.stat) & !is.na(gdsc.stat), ccle.stat * weight$ccle + gdsc.stat * weight$gdsc, -100)
               tissue.pvalue <- ccle.pvalue * weight$ccle + gdsc.pvalue * weight$gdsc
               
               if(boot)
@@ -1466,7 +1453,7 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
                 boot.models <- list("M2" = list(data = M2$gdsc$dataset, formula = M2$gdsc$formula, object = M2$gdsc$model))
                 M_res.gdsc <- fnboot(models = boot.models, R = 100)
               
-                tissue.R2.boot <- median(M_res.ccle[["M2"]]) * weight$ccle + median(M_res.gdsc[["M2"]]) * weight$gdsc
+                tissue.stat.boot <- median(M_res.ccle[["M2"]]) * weight$ccle + median(M_res.gdsc[["M2"]]) * weight$gdsc
               }
             }
           }
@@ -1477,16 +1464,16 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
               
               M3B <- list(ccle = fnCreateIsoformModel(drug = Drugs_ToCheck, nullModel = M0$ccle, data = ccle.isoforms.fpkm, isoform = as.character(transcript.id)), 
                           gdsc = fnCreateIsoformModel(drug = Drugs_ToCheck, nullModel = M0$gdsc, data = ccle.isoforms.fpkm, isoform = as.character(transcript.id)))
-              if(!is.null(M3B$ccle) && !is.null(M3B$gdsc)){if(!is.na(M3B$ccle$coefficient) && !is.na(M3B$gdsc$coefficient)){if(sign(M3B$ccle$coefficient) != sign(M3B$gdsc$coefficient)){M3B$ccle <- NULL; M3B$gdsc <- NULL}}}
+              if(!is.null(M3B$ccle) && !is.null(M3B$gdsc)){if(!is.na(M3B$ccle$coefficient) && !is.na(M3B$gdsc$coefficient)){if((sign(M3B$ccle$coefficient) != sign(M3B$gdsc$coefficient)) || M3B$ccle$coefficient == 0 || M3B$gdsc$coefficient == 0){M3B$ccle <- NULL; M3B$gdsc <- NULL}}}
               if(!is.null(M3B$ccle) && !is.null(M3B$gdsc))
               {
-                ccle.R2 <- compute.R2(M3B$ccle$dataset$drug, fitted(M3B$ccle$model))
-                gdsc.R2 <- compute.R2(M3B$gdsc$dataset$drug, fitted(M3B$gdsc$model))
+                ccle.stat <- compute.stat(stat, M3B$ccle$dataset$drug, fitted(M3B$ccle$model))
+                gdsc.stat <- compute.stat(stat, M3B$gdsc$dataset$drug, fitted(M3B$gdsc$model))
                 
                 if(nrow(summary(M3B$ccle$model)$coefficients) == 2){ ccle.pvalue <- summary(M3B$ccle$model)$coefficients[2, 4]} else{ ccle.pvalue <- 1}
                 if(nrow(summary(M3B$gdsc$model)$coefficients) == 2){ gdsc.pvalue <- summary(M3B$gdsc$model)$coefficients[2, 4]} else{ gdsc.pvalue <- 1}
                 
-                tissue.R2 <- ccle.R2 * weight$ccle + gdsc.R2 * weight$gdsc
+                tissue.stat <- ifelse(!is.na(ccle.stat) & !is.na(gdsc.stat), ccle.stat * weight$ccle + gdsc.stat * weight$gdsc, -100)
                 tissue.pvalue <- ccle.pvalue * weight$ccle + gdsc.pvalue * weight$gdsc
 
                 if(boot)
@@ -1498,7 +1485,7 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
                   boot.models <- list("M3B" = list(data = M3B$gdsc$dataset, formula = M3B$gdsc$formula, object = M3B$gdsc$model))
                   M_res.gdsc <- fnboot(models = boot.models, R = 100)
                 
-                  tissue.R2.boot <- median(M_res.ccle[["M3B"]]) * weight$ccle + median(M_res.gdsc[["M3B"]]) * weight$gdsc
+                  tissue.stat.boot <- median(M_res.ccle[["M3B"]]) * weight$ccle + median(M_res.gdsc[["M3B"]]) * weight$gdsc
                 }
               }
           }
@@ -1509,7 +1496,7 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
             M2 <- fnCreateGeneModel(drug = Drugs_ToCheck, nullModel = M0, data = ccle.genes.fpkm[,gene.id])
             if(!is.null(M2))
             {
-              tissue.R2 <- compute.R2(M2$dataset$drug, fitted(M2$model))
+              tissue.stat <- compute.stat(stat, M2$dataset$drug, fitted(M2$model))
               tissue.pvalue <- summary(M2$model)$coefficients[2, 4]
               if(nrow(summary(M2$model)$coefficients) == 2){ tissue.pvalue <- summary(M2$model)$coefficients[2, 4]} else{ tissue.pvalue <- 1}
               
@@ -1517,7 +1504,7 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
               {
                 boot.models <- list("M2" = list(data = M2$dataset, formula = M2$formula, object = M2$model))
                 M_res.ccle <- fnboot(models = boot.models, R = 100)
-                tissue.R2.boot <- median(M_res.ccle[["M2"]])
+                tissue.stat.boot <- median(M_res.ccle[["M2"]])
               }
               
             }
@@ -1527,7 +1514,7 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
               M3B <- fnCreateIsoformModel(drug = Drugs_ToCheck, nullModel = M0, data = ccle.isoforms.fpkm, isoform = as.character(transcript.id))
               if(!is.null(M3B))
               {
-                tissue.R2 <- compute.R2(M3B$dataset$drug, fitted(M3B$model))
+                tissue.stat <- compute.stat(stat, M3B$dataset$drug, fitted(M3B$model))
                 if(nrow(summary(M3B$model)$coefficients) == 2){ tissue.pvalue <- summary(M3B$model)$coefficients[2, 4]} else{ tissue.pvalue <- 1}
                 
                 if(boot)
@@ -1535,25 +1522,23 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE)
                   boot.models <- list("M3B" = list(data = M3B$dataset, formula = M3B$formula, object = M3B$model))
                   M_res.ccle <- fnboot(models = boot.models, R = 100)  
                
-                  tissue.R2.boot <- median(M_res.ccle[["M3B"]])
+                  tissue.stat.boot <- median(M_res.ccle[["M3B"]])
                 }
               }
             }
           })
-          significant_table[j, tissue] <- tissue.R2
+          significant_table[j, tissue] <- tissue.stat
           significant_table[j, paste0(tissue,"_pvalue")] <- tissue.pvalue
-          significant_table[j, paste0(tissue,"_boot")] <- tissue.R2.boot
+          if(boot){significant_table[j, paste0(tissue,"_boot")] <- tissue.stat.boot}
       }
     }
     rr[[drug]] <- significant_table
   }
   return(rr)
 }
-
 ####check if biomarkers recognised from all data is working in breast cell lines based on bootstrap 
-##but for each give isoform in all tissue types it should be kept so that we would have R2 for that isoform
-fnidentify.tissue.specific.biomarkers.bootstarp <- function(biomarkers, tissues.pvalue, tissues.statistics, tissue.best.isoform, tissue)
-{
+##but for each given isoform in all tissue types it should be kept so that we would have R2 for that isoform
+fnidentify.tissue.specific.biomarkers.bootstarp <- function(biomarkers, tissues.pvalue, tissues.statistics, tissue.best.isoform, tissue) {
   rr <- list()
   for(i in 1:length(biomarkers))
   {
@@ -1563,30 +1548,29 @@ fnidentify.tissue.specific.biomarkers.bootstarp <- function(biomarkers, tissues.
     {
       for(j in 1:nrow(significant_table))
       {
-        tissue.R2 <- 0
+        tissue.stat <- 0
         if (significant_table[j, "type"] == "gene"){
           if((sign(tissues.pvalue[[significant_table[j, "gene.id"]]][[drug]]["M2","M0"]) == sign(significant_table[j, "estimate"])))
           {
-            tissue.R2 <- tissues.statistics[[significant_table[j, "gene.id"]]][[drug]]["median","M2"]
+            tissue.stat <- tissues.statistics[[significant_table[j, "gene.id"]]][[drug]]["median","M2"]
           }
         }
         if (significant_table[j, "type"] == "isoform"){
           if(tissue.best.isoform[[significant_table[j, "gene.id"]]][[drug]] == as.character(significant_table[j, "transcript.id"])){
             if((sign(tissues.pvalue[[significant_table[j, "gene.id"]]][[drug]]["M3B","M0"]) == sign(significant_table[j, "estimate"])))
             {
-              tissue.R2 <- tissues.statistics[[significant_table[j, "gene.id"]]][[drug]]["median","M3B"]
+              tissue.stat <- tissues.statistics[[significant_table[j, "gene.id"]]][[drug]]["median","M3B"]
             }
           }
         }
-        significant_table[j, paste0(tissue,"_boot")] <- tissue.R2
+        significant_table[j, paste0(tissue,"_boot")] <- tissue.stat
       }
     }
     rr[[drug]] <- significant_table
   }
   return(rr)
 }
-fnTop.significant.biomarkers.heatmap <- function(top.significant.biomarkers, drug)
-{
+fnTop.significant.biomarkers.heatmap <- function(top.significant.biomarkers, drug) {
   dtassociation <- top.significant.biomarkers[[drug]]
   drugid <- drug
   RowNames <- NULL
@@ -1595,8 +1579,8 @@ fnTop.significant.biomarkers.heatmap <- function(top.significant.biomarkers, dru
     temp <- associations.top.biomarkers.tissues(gene = rownames(dtassociation)[i], isoform = dtassociation[i,"isoform_ccle"], drug = drugid, specificity = dtassociation[i,"specificity"])
     if(i == 1)
     {
-      df.R2.tissue <- matrix(0, ncol = length(temp) + 1,nrow = nrow(dtassociation))      
-      colnames(df.R2.tissue) <- c(names(temp),"All")
+      df.stat.tissue <- matrix(0, ncol = length(temp) + 1,nrow = nrow(dtassociation))      
+      colnames(df.stat.tissue) <- c(names(temp),"All")
     }
     if(dtassociation[i,"specificity"] == "isoform")
     {
@@ -1609,693 +1593,15 @@ fnTop.significant.biomarkers.heatmap <- function(top.significant.biomarkers, dru
     }
     for(tissue in names(temp))
     {
-      df.R2.tissue[i,tissue] <- temp[[tissue]]
+      df.stat.tissue[i,tissue] <- temp[[tissue]]
     }
-    df.R2.tissue[i,"All"] <-  dtassociation[i,"R2"]
+    df.stat.tissue[i,"All"] <-  dtassociation[i,stat]
   }
   
-  colnames(df.R2.tissue) <- capitalize(gsub("_", " ", colnames(df.R2.tissue)))
-  rownames(df.R2.tissue) <- RowNames
+  colnames(df.stat.tissue) <- capitalize(gsub("_", " ", colnames(df.stat.tissue)))
+  rownames(df.stat.tissue) <- RowNames
   
-  pdf(file.path(path.diagrams,sprintf("%s_R2_Heatmap.pdf",drug)), height = 5,width = 5)
-  heatmap(df.R2.tissue, Rowv=NA, Colv=NA, col = colorRampPalette(c("red","blue"))(100), scale="column", margins=c(5,10),cexRow =.7,cexCol = .7)
+  pdf(file.path(path.diagrams,sprintf("%s_%s_Heatmap.pdf",drug,stat)), height = 5,width = 5)
+  heatmap(df.stat.tissue, Rowv=NA, Colv=NA, col = colorRampPalette(c("red","blue"))(100), scale="column", margins=c(5,10),cexRow =.7,cexCol = .7)
   dev.off()
-}
-
-
-fnIsoformsExp <- function(GeneId, Isoforms_FPKM = ccle.isoforms.fpkm)
-{
-  linearFormula_Iso <- ""
-  Isoformsdf <- data.frame(matrix(NA, nrow=nrow(Isoforms_FPKM), ncol=0, byrow=FALSE))
-  rownames(Isoformsdf) <- rownames(Isoforms_FPKM)
-  Isoforms_of_Genes <- fnIsoforms_of_Gene(GeneId = GeneId)
-  for(j in 1: nrow(Isoforms_of_Genes))
-  {
-    if (as.character(Isoforms_of_Genes[j,]) %in% colnames(ccle.isoforms.fpkm))
-    {
-      Isoformsdf[,as.character(Isoforms_of_Genes[j,])] <- Isoforms_FPKM [,as.character(Isoforms_of_Genes[j,])]
-      linearFormula_Iso <- paste(linearFormula_Iso , as.character(Isoforms_of_Genes[j,]) , "+")
-    }
-  }
-  linearFormula_Iso <-  substr(linearFormula_Iso, 1, nchar(linearFormula_Iso)-1)
-  return(list(FPKM = Isoformsdf, names = linearFormula_Iso))
-}
-fnSensitivity.isoforms <- function (Isoforms, drug, best, method = "bootstrap", stat = "adj.r.squared")
-{
-  Models <- c("M0",colnames(Isoforms$FPKM))
-  drugs_No <- ncol(ccle.drug.sensitivity)
-  M_Comp_cases <- list()
-  M_res <- list()
-  for(i in 1:length(Models))
-  {
-    M_res[[i]] <- numeric()
-    names(M_res)[i] <- Models[i]
-  }
-  boot.models <- list()
-  #layout(matrix(1:24,6,4))
-  
-  P_values <- matrix(NA,nrow=2, ncol=ncol(Isoforms$FPKM), byrow=FALSE)
-  rownames(P_values) <- c("raw","boot")
-  colnames(P_values) <- colnames(Isoforms$FPKM)
-  
-  statistics <- matrix(0,nrow=5, ncol=length(Models), byrow=FALSE)
-  rownames(statistics) <- c("mean","median","min","max","var")
-  colnames(statistics) <- Models
-  
-  Drugs_ToCheck <- drug
-  Genedf0 <-data.frame(ccle.drug.sensitivity[,Drugs_ToCheck])
-  colnames(Genedf0)[1] <- Drugs_ToCheck
-  Genedf0[,"Tissue"] <- factor(ccle.drug.tissuetype[,"tissue.type"], ordered =FALSE)
-  Genedf0 <- Genedf0[complete.cases(Genedf0),]
-  Genedf0$Tissue <- factor(Genedf0$Tissue, ordered =FALSE)
-  
-  linearFormula0 <- paste(Drugs_ToCheck,"~ Tissue")
-  
-  M_Comp_cases[["M0"]] <- lm (as.formula(linearFormula0) , Genedf0)
-  boot.models[["M0"]] <- list(data = Genedf0, formula = linearFormula0, object = M_Comp_cases[["M0"]])
-  for(j in 1:ncol(Isoforms$FPKM))
-  {
-    Isoformsdf_temp <- data.frame(Genedf0, Isoforms$FPKM[rownames(Genedf0),j])
-    colnames(Isoformsdf_temp)[ncol(Isoformsdf_temp)] <- colnames(Isoforms$FPKM)[j]
-    linearFormula_Iso_temp <- paste(paste(Drugs_ToCheck,"~ Tissue + "), colnames(Isoforms$FPKM)[j])
-    M_Comp_cases[[colnames(Isoforms$FPKM)[j]]] <- lm (linearFormula_Iso_temp, Isoformsdf_temp)
-    boot.models[[colnames(Isoforms$FPKM)[j]]] <- list(data = Isoformsdf_temp, formula = linearFormula_Iso_temp, object = M_Comp_cases[[colnames(Isoforms$FPKM)[j]]])
-  }
-  M_res <- fnboot.tissuebased(boot.models, isoforms.no = ncol(Isoforms$FPKM), stat, R = 100)
-  for(j in 1:length(Models))
-  {
-    statistics["mean",Models[j]] <- mean(M_res[[Models[j]]])
-    statistics["median",Models[j]] <- median (M_res[[Models[j]]])
-    statistics["min",Models[j]] <- min(M_res[[Models[j]]])
-    statistics["max",Models[j]] <- max(M_res[[Models[j]]])
-    statistics["var",Models[j]] <- var(M_res[[Models[j]]])
-  }
-  Gene_Coef_Index <- nrow((summary(M_Comp_cases[[best]]))$coefficients)
-  
-  for(j in 2:length(Models))
-  {
-    if((stat == "r.squared") || (stat == "adj.r.squared") || (stat == "cindex")){direction <- "greater"}else{direction <- "less"}
-    P_values["boot",Models[j]] <- wilcox.test(M_res[[Models[j]]] , M_res[["M0"]], paired = TRUE, alternative = direction)$p.value
-    if(is.na(P_values["boot",Models[j]])){P_values["boot",Models[j]] <- 1}
-    P_values["boot",Models[j]] <- min(ncol(Isoforms$FPKM) * P_values["boot",Models[j]], 1)
-    P_values["raw",Models[j]] <- ifelse(nrow(summary(M_Comp_cases[[Models[j]]])$coefficients) == Gene_Coef_Index, summary(M_Comp_cases[[Models[j]]])$coefficients[Gene_Coef_Index,4],1)
-  }
-  
-  return (list(p.values = P_values, statistics = statistics))
-}
-
-
-fnCCLE.GDSC <- function(gene, isoform, drug, method=c("all","most.correlated","tissue.based","cor"), tissue.type="", celllines.col="", R2="", pvalue="", annot.ensembl.all.genes)
-{
-  ccle.sensitivity <- subset(ccle.drug.sensitivity, !is.na(ccle.drug.sensitivity[,drug]), select = drug)
-  gdsc.sensitivity <- subset(gdsc.drug.sensitivity, !is.na(gdsc.drug.sensitivity[,drug]), select = drug)
-  
-  sensitivity <- NULL
-  switch(method , "most.correlated" = {
-    intersected.celllines <- intersect(names(ccle.sensitivity),names(gdsc.sensitivity))
-    ccle.sensitivity <- ccle.sensitivity[intersected.celllines]
-    gdsc.sensitivity <- gdsc.sensitivity[intersected.celllines]
-    
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    
-    sensitivity[,1] <- ccle.sensitivity
-    rownames(sensitivity) <- names(ccle.sensitivity)
-    sensitivity <- cbind(sensitivity, ccle.genes.fpkm[rownames(sensitivity),gene], ccle.isoforms.fpkm[rownames(sensitivity),isoform],ccle.drug.tissuetype[rownames(sensitivity),"tissue.type"])
-    colnames(sensitivity) <- c("ccle.AUC", "gene.exp","isoform.exp","tissue.type")
-    
-    
-    sensitivity<- cbind(sensitivity, ccle.genes.fpkm[rownames(sensitivity),gene], ccle.isoforms.fpkm[rownames(sensitivity),isoform],ccle.drug.tissuetype[rownames(sensitivity),"tissue.type"])
-    colnames(sensitivity) <- c("ccle.AUC","gdsc.AUC","rank.diff", "gene.exp","isoform.exp","tissue.type")
-    pdf(file = file.path(path.diagrams, sprintf("%s_%s_cellLines.pdf",isoform,drug)), height=7, width=7)
-    
-    sensitivity <- cbind(sensitivity, "red")
-    colnames(sensitivity)[ncol(sensitivity)] <- "col"
-    my.xlim <- range(as.numeric(sensitivity[,"isoform.exp"]))
-    my.ylim <- range(as.numeric(sensitivity[,"ccle.AUC"]))
-    sensitivity[,"col"] <- colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity))
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="ccle AUC")
-    points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"], pch = 19,col = sensitivity[,"col"])
-    
-    x <- c(round(my.xlim[1], digits = 1) + 0.1 , round(my.xlim[1], digits = 1) + 0.3, round(my.xlim[1], digits = 1) + 0.3,round(my.xlim[1], digits = 1) + 0.1)
-    y <- c(round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1), round(my.ylim[2], digits = 1))
-    legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "", limits = c("resistent","sensitive"),cex=.8)
-    
-    si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-    textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-    ri <- 1:3
-    textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-    textxy(x[2], y[3] - .05, sprintf("pvalue = %s", round(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]][["M0","M3B"]], digits = 20)), cex=0.9)
-    textxy(x[2]+.2, y[3] - .07, sprintf("R2 = %s", round(ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]][["median","M3B"]], digits = 2)), cex=0.9)
-    title(sprintf("Correlation between %s(%s) and %s for \n the most correlated cell lines between gdsc & ccle",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene), "Symbol"], gsub("drugid_","",drug)),cex=.9)
-    dev.off()
-  }, 
-  "tissue.based" = {
-    unique.ccle.celllines <- setdiff(rownames(ccle.sensitivity),rownames(gdsc.sensitivity))
-    unique <- cbind(ccle.sensitivity[unique.ccle.celllines,drug], ccle.genes.fpkm[unique.ccle.celllines,gene], ccle.isoforms.fpkm[unique.ccle.celllines,isoform],ccle.drug.tissuetype[unique.ccle.celllines,"tissue.type"])
-    colnames(unique) <- c("ccle.AUC", "gene.exp","isoform.exp","tissue.type")
-    unique <- subset(unique, unique[,"tissue.type"] == tissue.type)
-    
-    intersected.celllines <- intersect(rownames(ccle.sensitivity),rownames(gdsc.sensitivity))
-    sensitivity <- cbind(ccle.sensitivity[intersected.celllines,], gdsc.sensitivity[intersected.celllines,], ccle.genes.fpkm[intersected.celllines,gene], ccle.isoforms.fpkm[intersected.celllines,isoform],ccle.drug.tissuetype[intersected.celllines,"tissue.type"])
-    colnames(sensitivity) <- c("ccle.AUC","gdsc.AUC", "gene.exp","isoform.exp","tissue.type")
-    sensitivity <- subset(sensitivity, sensitivity[,"tissue.type"] == tissue.type)
-    #if(nrow(sensitivity) > 1){sensitivity <- sensitivity[order(sensitivity[,"gdsc.AUC"]),]}
-    
-    
-    
-    if(nrow(sensitivity) > 0) 
-    {
-      my.xlim <- c(min(min(as.numeric(sensitivity[,"isoform.exp"])), min(as.numeric(unique[,"isoform.exp"]))),max(max(as.numeric(sensitivity[,"isoform.exp"])), max(as.numeric(unique[,"isoform.exp"]))))
-      my.ylim <- c(min(min(as.numeric(sensitivity[,"ccle.AUC"])), min(as.numeric(unique[,"ccle.AUC"]))),max(max(as.numeric(sensitivity[,"ccle.AUC"])), max(as.numeric(unique[,"ccle.AUC"]))))
-      
-      
-      sensitivity <- cbind(sensitivity, "red")
-      colnames(sensitivity)[ncol(sensitivity)] <- "col"
-      sensitivity[,"col"] <- colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity)) #celllines.col[rownames(sensitivity)]#
-      
-      plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="ccle.AUC",cex.lab = .7, cex.axis = .7)
-      points(unique[,"isoform.exp"], unique[,"ccle.AUC"], pch = 17,col = "grey")
-      points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"], pch = 19,col = sensitivity[,"col"])
-      
-      x <- c(round(my.xlim[1], digits = 1) + 0.1 , round(my.xlim[1], digits = 1) + 0.3, round(my.xlim[1], digits = 1) + 0.3,round(my.xlim[1], digits = 1) + 0.1)
-      y <- c(round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1), round(my.ylim[2], digits = 1))
-      #legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "gdsc.AUC", limits = c("resistent","sensitive"),cex=.7)
-      
-      si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-      #textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-      ri <- 1:3
-      #textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-      textxy(my.xlim[1] , my.ylim[2] - .04, sprintf("pvalue = %s\n    R2 = %s", round(pvalue, digits = 20), round(R2, digits = 2)), cex=0.6)
-      title(sprintf("%s ",capitalize(gsub("_"," ",tissue.type))),cex.main=.8)
-    }
-    else if (nrow(unique) > 0) 
-    {
-      my.xlim <- range((as.numeric(unique[,"isoform.exp"])))
-      my.ylim <- range((as.numeric(unique[,"ccle.AUC"])))
-      
-      
-      plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="ccle.AUC",cex.lab = .7, cex.axis = .7)
-      points(unique[,"isoform.exp"], unique[,"ccle.AUC"], pch = 17,col = "grey")
-      
-      title(sprintf("%s ",capitalize(gsub("_"," ",tissue.type))),cex.main=.8)
-      
-    }
-  }, 
-  "all"= {
-    unique.ccle.celllines <- setdiff(names(ccle.sensitivity),names(gdsc.sensitivity))
-    ccle.unique <- ccle.sensitivity[unique.ccle.celllines]
-    unique <-  matrix(NA,nrow= length(ccle.unique))
-    unique <- ccle.unique
-    unique <- cbind(unique, ccle.genes.fpkm[names(unique),gene], ccle.isoforms.fpkm[names(unique),isoform],ccle.drug.tissuetype[names(unique),"tissue.type"])
-    colnames(unique) <- c("ccle.AUC", "gene.exp","isoform.exp","tissue.type")
-    
-    intersected.celllines <- intersect(names(ccle.sensitivity),names(gdsc.sensitivity))
-    ccle.sensitivity <- ccle.sensitivity[intersected.celllines]
-    gdsc.sensitivity <- gdsc.sensitivity[intersected.celllines]
-    
-    
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    sensitivity <- ccle.sensitivity
-    sensitivity <- cbind(sensitivity, gdsc.sensitivity, ccle.genes.fpkm[names(sensitivity),gene], ccle.isoforms.fpkm[names(sensitivity),isoform],ccle.drug.tissuetype[names(sensitivity),"tissue.type"])
-    colnames(sensitivity) <- c("ccle.AUC","gdsc.AUC", "gene.exp","isoform.exp","tissue.type")
-    
-    sensitivity <- sensitivity[order(sensitivity[,"gdsc.AUC"]),]
-    
-    #my.xlim <- as.numeric(range(sensitivity[,"isoform.exp"]))
-    #my.ylim <- as.numeric(range(sensitivity[,"ccle.AUC"]))
-    my.xlim <- c(min(min(as.numeric(sensitivity[,"isoform.exp"])), min(as.numeric(unique[,"isoform.exp"]))),max(max(as.numeric(sensitivity[,"isoform.exp"])), max(as.numeric(unique[,"isoform.exp"]))))
-    my.ylim <- c(min(min(as.numeric(sensitivity[,"ccle.AUC"])), min(as.numeric(unique[,"ccle.AUC"]))),max(max(as.numeric(sensitivity[,"ccle.AUC"])), max(as.numeric(unique[,"ccle.AUC"]))))
-    
-    
-    sensitivity <- cbind(sensitivity, "red")
-    colnames(sensitivity)[ncol(sensitivity)] <- "col"
-    sensitivity[,"col"] <- colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity))
-    
-    
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="ccle.AUC",cex.lab = .7, cex.axis = .7)
-    points(unique[,"isoform.exp"], unique[,"ccle.AUC"], pch = 17,col = "grey")
-    points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"], pch = 19,col = sensitivity[,"col"])
-    
-    x <- c(round(my.xlim[1], digits = 1) + 0.1 , round(my.xlim[1], digits = 1) + 0.3, round(my.xlim[1], digits = 1) + 0.3,round(my.xlim[1], digits = 1) + 0.1)
-    y <- c(round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1), round(my.ylim[2], digits = 1))
-    legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "gdsc.AUC", limits = c("resistent","sensitive"),cex=.6)
-    
-    si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-    #textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-    ri <- 1:3
-    #textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-    textxy(x[2], y[3] - .08, sprintf("pvalue = %s\n    R2 = %s", round(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]][["M0","M3B"]], digits = 20), round(ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]][["median","M3B"]], digits = 2)), cex=0.5)
-    title(sprintf("Correlation between %s(%s) and %s \n in all tissue types",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene), "Symbol"], gsub("drugid_","",drug)),cex.main=.7)
-  } , 
-  "all.res"= {
-    
-    Genedf0 <- data.frame(ccle.isoforms.fpkm[,isoform])
-    colnames(Genedf0) <- "isoform"
-    Genedf0[,"Tissue"] <- factor(ccle.drug.tissuetype[,"tissue.type"], ordered =FALSE)
-    Genedf0 <- Genedf0[complete.cases(Genedf0),]
-    Genedf0$Tissue <- factor(Genedf0$Tissue, ordered =FALSE)
-    linearFormula <- "isoform ~ Tissue"
-    M3 <- lm (linearFormula, Genedf0)
-    
-    unique.ccle.celllines <- setdiff(names(ccle.sensitivity),names(gdsc.sensitivity))
-    ccle.unique <- ccle.sensitivity[unique.ccle.celllines]
-    unique <-  matrix(NA,nrow= length(ccle.unique))
-    unique <- ccle.unique
-    unique <- cbind(unique, ccle.genes.fpkm[names(unique),gene], ccle.isoforms.fpkm[names(unique),isoform],ccle.drug.tissuetype[names(unique),"tissue.type"],M3$residuals[names(unique)])
-    colnames(unique) <- c("ccle.AUC", "gene.exp","isoform.exp","tissue.type","M3.res")
-    
-    intersected.celllines <- intersect(names(ccle.sensitivity),names(gdsc.sensitivity))
-    ccle.sensitivity <- ccle.sensitivity[intersected.celllines]
-    gdsc.sensitivity <- gdsc.sensitivity[intersected.celllines]
-    
-    
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    sensitivity <- ccle.sensitivity
-    sensitivity <- cbind(sensitivity, gdsc.sensitivity, ccle.genes.fpkm[names(sensitivity),gene], ccle.isoforms.fpkm[names(sensitivity),isoform],ccle.drug.tissuetype[names(sensitivity),"tissue.type"],M3$residuals[names(sensitivity)])
-    colnames(sensitivity) <- c("ccle.AUC","gdsc.AUC", "gene.exp","isoform.exp","tissue.type","M3.res")
-    
-    sensitivity <- sensitivity[order(sensitivity[,"gdsc.AUC"]),]
-    
-    #my.xlim <- as.numeric(range(sensitivity[,"isoform.exp"]))
-    #my.ylim <- as.numeric(range(sensitivity[,"ccle.AUC"]))
-    my.xlim <- c(min(min(as.numeric(sensitivity[,"M3.res"])), min(as.numeric(unique[,"M3.res"]))),max(max(as.numeric(sensitivity[,"M3.res"])), max(as.numeric(unique[,"M3.res"]))))
-    my.ylim <- c(min(min(as.numeric(sensitivity[,"ccle.AUC"])), min(as.numeric(unique[,"ccle.AUC"]))),max(max(as.numeric(sensitivity[,"ccle.AUC"])), max(as.numeric(unique[,"ccle.AUC"]))))
-    
-    
-    sensitivity <- cbind(sensitivity, "red")
-    colnames(sensitivity)[ncol(sensitivity)] <- "col"
-    sensitivity[,"col"] <- colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity))
-    
-    
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="ccle.AUC",cex.lab = .7, cex.axis = .7)
-    points(unique[,"M3.res"], unique[,"ccle.AUC"], pch = 17,col = "grey")
-    points(sensitivity[,"M3.res"], sensitivity[,"ccle.AUC"], pch = 19,col = sensitivity[,"col"])
-    
-    x <- c(round(my.xlim[1], digits = 1)  , round(my.xlim[1], digits = 1) + .3, round(my.xlim[1], digits = 1) + .3,round(my.xlim[1], digits = 1) )
-    y <- c(round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1), round(my.ylim[2], digits = 1))
-    legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "gdsc.AUC", limits = c("resistent","sensitive"),cex=.6)
-    
-    si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-    #textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-    ri <- 1:3
-    #textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-    textxy(x[2] + 2, y[3] - .08, sprintf("pvalue = %s\n    R2 = %s", round(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]][["M0","M3B"]], digits = 20), round(ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]][["median","M3B"]], digits = 2)), cex=0.5)
-    title(sprintf("Correlation between %s(%s) and %s \n in all tissue types",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene), "Symbol"], gsub("drugid_","",drug)),cex.main=.7)
-  } ,
-  "cor"= {   
-    intersected.celllines <- intersect(names(ccle.sensitivity),names(gdsc.sensitivity))
-    ccle.sensitivity <- ccle.sensitivity[intersected.celllines]
-    gdsc.sensitivity <- gdsc.sensitivity[intersected.celllines]
-    
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    sensitivity <- ccle.sensitivity
-    sensitivity <- cbind(sensitivity, gdsc.sensitivity)
-    colnames(sensitivity) <- c("ccle.AUC","gdsc.AUC")
-    my.xlim <- c(min(as.numeric(sensitivity[,"ccle.AUC"])), max(as.numeric(sensitivity[,"ccle.AUC"])))
-    my.ylim <- c(min(as.numeric(sensitivity[,"gdsc.AUC"])), max(as.numeric(sensitivity[,"gdsc.AUC"])))
-    
-    pdf(file = file.path(path.diagrams, sprintf("ccle_gdsc_%s.pdf", gsub("drugid_","",drug))), height=7, width=7)
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab="ccle.AUC", ylab="gdsc.AUC",main = sprintf("Correlation between gdsc and ccle for %s is %s", gsub("drugid_","",drug),round(cor(sensitivity[,"ccle.AUC"], sensitivity[,"gdsc.AUC"],method="spearman"),digits = 2)), cex.main = .9)
-    points(sensitivity[,"ccle.AUC"], sensitivity[,"gdsc.AUC"], pch = 19,col = "blue")
-    dev.off()
-  })
-  return(sensitivity)
-}
-fnCCLE.tissue <- function(gene, isoform, drug, method = c("all","tissue.based"), tissue.type= "", celllines.col = "", R2 = "", pvalue = "")
-{
-  ccle.sensitivity <- ccle.drug.sensitivity[complete.cases(ccle.drug.sensitivity[,drug]),drug]
-  
-  sensitivity <- NULL
-  switch(method , "tissue.based" = {
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    sensitivity <- ccle.sensitivity
-    sensitivity <- cbind(sensitivity, ccle.genes.fpkm[names(sensitivity),gene], ccle.isoforms.fpkm[names(sensitivity),isoform],ccle.drug.tissuetype[names(sensitivity),"tissue.type"])
-    colnames(sensitivity) <- c("ccle.AUC","gene.exp","isoform.exp","tissue.type")
-    sensitivity <- subset(sensitivity, sensitivity[,"tissue.type"] == tissue.type)
-    
-    if(nrow(sensitivity) > 0)
-    {
-      my.xlim <- range(as.numeric(sensitivity[,"isoform.exp"]))
-      my.ylim <- range(as.numeric(sensitivity[,"ccle.AUC"]))
-      
-      sensitivity <- cbind(sensitivity, "red")
-      colnames(sensitivity)[ncol(sensitivity)] <- "col"
-      sensitivity[,"col"] <- celllines.col[rownames(sensitivity)]#colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity))
-      
-      plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="ccle.AUC",cex.lab = .7, cex.axis = .7)
-      points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"], pch = 17,col = "grey")
-      #points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"], pch = 19,col = sensitivity[,"col"])
-      
-      x <- c(round(my.xlim[1], digits = 1) + 0.1 , round(my.xlim[1], digits = 1) + 0.3, round(my.xlim[1], digits = 1) + 0.3,round(my.xlim[1], digits = 1) + 0.1)
-      y <- c(round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1) - 0.1, round(my.ylim[2], digits = 1), round(my.ylim[2], digits = 1))
-      #legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "gdsc.AUC", limits = c("resistent","sensitive"),cex=.7)
-      
-      si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-      #textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-      ri <- 1:3
-      #textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-      textxy(my.xlim[1] , my.ylim[2] - .04, sprintf("pvalue = %s\n    R2 = %s", round(pvalue, digits = 20), round(R2, digits = 2)), cex=0.6)
-      title(sprintf("%s ",capitalize(gsub("_"," ",tissue.type))),cex.main=.8)
-    }
-  }, 
-  "all"= {
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    sensitivity <- ccle.sensitivity
-    sensitivity <- cbind(sensitivity, ccle.genes.fpkm[names(sensitivity),gene], ccle.isoforms.fpkm[names(sensitivity),isoform],ccle.drug.tissuetype[names(sensitivity),"tissue.type"])
-    colnames(sensitivity) <- c("ccle.AUC","gene.exp","isoform.exp","tissue.type")
-    sensitivity <- sensitivity[order(sensitivity[,"ccle.AUC"]),]
-    
-    my.xlim <- range(as.numeric(sensitivity[,"isoform.exp"]))
-    my.ylim <- range(as.numeric(sensitivity[,"ccle.AUC"]))
-    
-    sensitivity <- cbind(sensitivity, "red")
-    colnames(sensitivity)[ncol(sensitivity)] <- "col"
-    sensitivity[,"col"] <- colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity))
-    
-    
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="AUC",cex.lab = .7, cex.axis = .7)
-    points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"], pch = 17,col = "grey")
-    
-    x <- c(round(my.xlim[1], digits = 1) + 0.1 , round(my.xlim[1], digits = 1) + 0.3, round(my.xlim[1], digits = 1) + 0.3,round(my.xlim[1], digits = 1) + 0.1)
-    y <- c(round(my.ylim[2], digits = 1) - 0.2, round(my.ylim[2], digits = 1) - 0.2, round(my.ylim[2], digits = 1)-0.1, round(my.ylim[2], digits = 1)-.1)
-    #legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "", limits = c("resistent","sensitive"),cex=.6)
-    
-    si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-    #textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-    ri = 1:3
-    #textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-    textxy(my.xlim[1] , my.ylim[2] - .04, sprintf("pvalue = %s\n    R2 = %s", round(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]][["M0","M3B"]], digits = 20), round(ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]][["median","M3B"]], digits = 2)), cex=0.6)
-    title(sprintf("Correlation between %s(%s) and %s \n in all tissue types",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene), "Symbol"], gsub("drugid_","",drug)),cex.main=.7)
-  },
-  "all.res"={
-    Genedf0 <- data.frame(ccle.isoforms.fpkm[,isoform])
-    colnames(Genedf0) <- "isoform"
-    Genedf0[,"Tissue"] <- factor(ccle.drug.tissuetype[,"tissue.type"], ordered =FALSE)
-    Genedf0 <- Genedf0[complete.cases(Genedf0),]
-    Genedf0$Tissue <- factor(Genedf0$Tissue, ordered =FALSE)
-    linearFormula <- "isoform ~ Tissue"
-    M3 <- lm (linearFormula, Genedf0)
-    
-    sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-    sensitivity <- ccle.sensitivity
-    sensitivity <- cbind(sensitivity, ccle.genes.fpkm[names(sensitivity),gene], ccle.isoforms.fpkm[names(sensitivity),isoform],ccle.drug.tissuetype[names(sensitivity),"tissue.type"], M3$residuals[names(sensitivity)])
-    colnames(sensitivity) <- c("ccle.AUC","gene.exp","isoform.exp","tissue.type","M3.res")
-    sensitivity <- sensitivity[order(sensitivity[,"M3.res"]),]
-    
-    my.xlim <- range(as.numeric(sensitivity[,"M3.res"]))
-    my.ylim <- range(as.numeric(sensitivity[,"ccle.AUC"]))
-    
-    sensitivity <- cbind(sensitivity, "red")
-    colnames(sensitivity)[ncol(sensitivity)] <- "col"
-    sensitivity[,"col"] <- colorRampPalette(c("blue" , "light blue","red"))(nrow(sensitivity))
-    
-    
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="AUC",cex.lab = .7, cex.axis = .7)
-    points(sensitivity[,"M3.res"], sensitivity[,"ccle.AUC"], pch = 17,col = "grey")
-    
-    x <- c(round(my.xlim[1], digits = 1) + 0.1 , round(my.xlim[1], digits = 1) + 0.3, round(my.xlim[1], digits = 1) + 0.3,round(my.xlim[1], digits = 1) + 0.1)
-    y <- c(round(my.ylim[2], digits = 1) - 0.2, round(my.ylim[2], digits = 1) - 0.2, round(my.ylim[2], digits = 1)-0.1, round(my.ylim[2], digits = 1)-.1)
-    #legend.gradient(cbind(x, y), cols = colorRampPalette(c("blue" , "light blue","red"))( nrow(sensitivity) ), title = "", limits = c("resistent","sensitive"),cex=.6)
-    
-    si <- (nrow(sensitivity) - 2):nrow(sensitivity)
-    #textxy(as.numeric(sensitivity[si,"isoform.exp"]),as.numeric(sensitivity[si,"ccle.AUC"]),rownames(sensitivity)[si], cex=0.7)
-    ri <- 1:3
-    #textxy(as.numeric(sensitivity[ri,"isoform.exp"]),as.numeric(sensitivity[ri,"ccle.AUC"]),rownames(sensitivity)[ri], cex=0.7)
-    textxy(my.xlim[1] + 2.5, my.ylim[2] - .04, sprintf("pvalue = %s\nR2 = %s", round(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]][["M0","M3B"]], digits = 20), round(ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]][["median","M3B"]], digits = 2)), cex=0.6)
-    title(sprintf("Correlation between %s(%s) and %s \n in all tissue types",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"], gsub("drugid_","",drug)),cex.main=.7)
-    
-    
-  })
-  return(sensitivity)
-}
-fnCCLE <- function(gene, isoform, drug, col = c("static","tissue.based"))
-{
-  ccle.sensitivity <- ccle.drug.sensitivity[complete.cases(ccle.drug.sensitivity[,drug]),drug]
-  sensitivity <- NULL
-  
-  ccle.sensitivity <- ccle.sensitivity[order(ccle.sensitivity)] 
-  
-  sensitivity <- matrix(NA,nrow= length(ccle.sensitivity))
-  sensitivity[,1] <- ccle.sensitivity
-  rownames(sensitivity) <- names(ccle.sensitivity)
-  sensitivity <- cbind(sensitivity, ccle.genes.fpkm[rownames(sensitivity),gene], ccle.isoforms.fpkm[rownames(sensitivity),isoform],ccle.drug.tissuetype[rownames(sensitivity),"tissue.type"])
-  colnames(sensitivity) <- c("ccle.AUC", "gene.exp","isoform.exp","tissue.type")
-  col.tissuetypes <- levels(factor(sensitivity[,"tissue.type"]))
-  col.tissuetypes <- cbind(col.tissuetypes, colorRampPalette(brewer.pal(n=11, name= 'Spectral'))(length(col.tissuetypes)))
-  colnames(col.tissuetypes) <- c("tissue.type","col")
-  rownames(col.tissuetypes) <- col.tissuetypes[,"tissue.type"]
-  sensitivity <- cbind(sensitivity, "red")
-  colnames(sensitivity)[ncol(sensitivity)] <- "col"
-  for(i in 1:nrow(col.tissuetypes))
-  {
-    sensitivity[which(sensitivity[,"tissue.type"]==col.tissuetypes[i,"tissue.type"]),"col"] = col.tissuetypes[i,"col"]
-  }
-  my.xlim <- range(as.numeric(sensitivity[,"isoform.exp"]))
-  my.ylim <- range(as.numeric(sensitivity[,"ccle.AUC"]))
-  
-  
-  switch(col, "static" = {
-    pdf(file = file.path(path.diagrams, sprintf("ccle_%s_%s_%s.pdf",gene, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"],gsub("drugid_","",drug))), height=7, width=7)
-    
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="AUC", main = sprintf("Correlation between %s(%s) and %s \n in CCLE experiments",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"], gsub("drugid_","",drug)),cex=.9)
-    points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"],  pch = 19,col = "blue")
-    dev.off()
-  }, 
-  "tissue.based" = {
-    
-    pdf(file = file.path(path.diagrams, sprintf("ccle_%s_%s_%s.pdf",gene, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"],gsub("drugid_","",drug))), height=7, width=7)
-    
-    plot(NA, xlim = my.xlim, ylim = my.ylim, xlab=isoform, ylab="AUC", main = sprintf("Correlation between %s(%s) and %s \n in ccle cell lines based on tissue types",isoform, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"], gsub("drugid_","",drug)),cex=.9)
-    points(sensitivity[,"isoform.exp"], sensitivity[,"ccle.AUC"],  pch = 19,col = sensitivity[,"col"])
-    x <- c(round(my.xlim[1], digits = 1) , round(my.xlim[1], digits = 1) + 1, round(my.xlim[1], digits = 1) + 1,round(my.xlim[1], digits = 1) )
-    y <- c(round(my.ylim[2], digits = 1) - 0.3, round(my.ylim[2], digits = 1) - 0.3, round(my.ylim[2], digits = 1), round(my.ylim[2], digits = 1))
-    legend.gradient(cbind(x, y), cols =  col.tissuetypes[,"col"], title = "tissue types", limits = "",cex=.8)
-    yt <- y[3]-0.009
-    for(i in 1:nrow(col.tissuetypes))
-    {
-      textxy(x[2], yt, col.tissuetypes[i,"tissue.type"] , cex=0.5)
-      yt <- yt -0.0145
-    }
-  })
-  return(list(sensitivity = sensitivity , col.tissuetypes = col.tissuetypes))  
-}
-fnPlotTissuetypes <- function(drug, sensitivity, col.tissuetypes)
-{
-  pdf(file = file.path(path.diagrams, sprintf("tissue.type_%s.pdf", gsub("drugid_","",drug))), height=4, width=8)
-  mp <- barplot(table(sensitivity[,"tissue.type"]), beside = TRUE,  space = .6, col = col.tissuetypes[,"col"], ylab = "Number of cell lines", main = sprintf("The number of cell lines with each tissue type (%s)",gsub("drugid_","",drug)),border=NA,xaxt='n',cex.main = .7, cex.lab = .7, cex.axis = .7)
-  text(mp, par("usr")[3], labels = capitalize(gsub("_"," ",col.tissuetypes[,"tissue.type"])), srt = 30, adj = c(1,1), xpd = TRUE, cex=.6)
-  dev.off()
-  
-}
-fnCheckIsoform <- function(gene, isoform, drug, ccle=FALSE, annot.ensembl.all.genes)
-{
-  fnsensitivity.tissues <- fnSensitivity.tissue (gene, isoform, drug)
-  CCLE <- fnCCLE(gene, isoform, drug, col = "static")
-  sensitivity <- CCLE$sensitivity
-  fnPlotTissuetypes(drug, sensitivity, CCLE$col.tissuetypes)
-  
-  n <- table(sensitivity[,"tissue.type"])
-  tissue.types <- names(fnsensitivity.tissues$tissues)
-  sensitivity.tissues <- matrix(NA,nrow= (length(tissue.types) + 1), ncol=5)
-  rownames(sensitivity.tissues) <- c("all",tissue.types)
-  colnames(sensitivity.tissues) <- c("log.pvalue","col","rsquared","n","significance")
-  
-  names.tissues.colors <- colorRampPalette(brewer.pal(n=11, name= 'Spectral'))(length(tissue.types))
-  #c("blue", "green", "Blues", "RdPu", "Greens", "PuRd", "Greys", "Oranges", "PuBuGn", "Purples", "PuBu", "Reds", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd", "BuGn", "BuPu", "GnBu","OrRd")
-  ranges <- c(1,0.75,.7,.65,.60,0)
-  col.tissuetypes.ranges <- matrix(NA,nrow = length(tissue.types), ncol = length(ranges))
-  rownames(col.tissuetypes.ranges) <- tissue.types
-  colnames(col.tissuetypes.ranges) <- ranges
-  for(i in 1:nrow(col.tissuetypes.ranges))
-  {
-    col.tissuetypes.ranges[i,] <-  colorRampPalette(c("white",names.tissues.colors[i]))(length(ranges))
-  }
-  sensitivity.tissues[1,"rsquared"] <- ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]]["median","M3B"]
-  sensitivity.tissues[1,"log.pvalue"] <- -log10(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]]["M0","M3B"])
-  Genedf0 <- data.frame(ccle.drug.sensitivity[,which(colnames(ccle.drug.sensitivity) == drug)])
-  Genedf0[,"Tissue"] <- factor(ccle.drug.tissuetype[,"tissue.type"], ordered =FALSE)
-  sensitivity.tissues[1,"n"] <- nrow(Genedf0[complete.cases(Genedf0),])
-  sensitivity.tissues[1,"col"] <- "grey"
-  sensitivity.tissues[1,"significance"] <- " "
-  for (i in 1:length(tissue.types))
-  {
-    sensitivity.tissues[i+1,"rsquared"] <- fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] * sign(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M3B","M0"])
-    sensitivity.tissues[i+1,"log.pvalue"] <- -log10(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"])
-    sensitivity.tissues[i+1,"n"] <- n[tissue.types[i]]
-    if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .001)
-    {sensitivity.tissues[i+1,"significance"] <- "***"} else if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .01)
-    {sensitivity.tissues[i+1,"significance"] <- "**"} else if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .05)                           
-    {sensitivity.tissues[i+1,"significance"] <- "*"} else if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .1)                           
-    {sensitivity.tissues[i+1,"significance"] <- "-"} else  {sensitivity.tissues[i+1,"significance"] <- " "}          
-    j <- ncol(col.tissuetypes.ranges)
-    if(fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] <0 ){fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] <- 0}
-    while(fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] < as.numeric(colnames(col.tissuetypes.ranges)[j]))
-    {
-      j <- j - 1
-    }
-    sensitivity.tissues[i+1,"col"] <- col.tissuetypes.ranges[tissue.types[i],j]
-  }
-  
-  pdf(file = file.path(path.diagrams, sprintf("tissue.type_R2_%s_%s_%s.pdf", gene, annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"], gsub("drugid_","",drug))), height=4, width=7)
-  my.ylim <- range(as.numeric(sensitivity.tissues[,"rsquared"]))
-  my.ylim <- c(-1, +1)
-  mp <- barplot(as.numeric(sensitivity.tissues[,"rsquared"]), beside = TRUE, ylim = my.ylim, width = .8, space = 0.6, xlim = c(0,25), col =sensitivity.tissues[,"col"], ylab = "R2", main = sprintf("Sensitivity of drug: %s for isoform: %s in different tissue types",gsub("drugid_","",drug),isoform),border=NA,xaxt='n', cex.main = .7, cex.lab = .7, cex.axis = .7)
-  text(mp, 0, labels = capitalize(gsub("_", " ", rownames(sensitivity.tissues))), srt = 30, adj = c(1,1), xpd = TRUE, cex=.5)  
-  text(mp + .5, as.numeric(sensitivity.tissues[,"rsquared"]) +.03, labels = sensitivity.tissues[,"significance"], adj = c(1,1),cex=1)
-  text(mp +.5 , .06, labels = sprintf("n = %s", sensitivity.tissues[,"n"]), adj = c(1,1),cex=.4)
-  dev.off()
-  
-  if(drug %in% colnames(gdsc.drug.sensitivity) & !ccle)
-  {
-    fnCCLE.GDSC(gene, isoform, drug, method = "cor", "","", annot.ensembl.all.genes)
-    
-    pdf(file = file.path(path.diagrams, sprintf("%s_%s_%s_cellLines_all.pdf",gene,annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"],gsub("drugid_","",drug))), height=24, width=16)
-    par(mfrow=c(6, 4))
-    sensitivity.all <- fnCCLE.GDSC(gene, isoform, drug, method = "all.res", annot.ensembl.all.genes)
-    for (tissue.type in tissue.types)
-    {
-      fnCCLE.GDSC(gene, isoform, drug, method="tissue.based", tissue.type, sensitivity.all[,"col"], R2=fnsensitivity.tissues$statistics[[tissue.type]]["median","M3B"], pvalue=fnsensitivity.tissues$p.values[[tissue.type]]["M0","M3B"], annot.ensembl.all.genes)
-    }
-    dev.off() 
-    
-    pdf(file = file.path(path.diagrams, sprintf("%s_%s_%s_cellLines_significant.pdf",gene,annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"],gsub("drugid_","",drug))), height=8, width=16)
-    par(mfrow=c(2, 4))
-    sensitivity.all = fnCCLE.GDSC(gene, isoform, drug, method = "all.res", "", annot.ensembl.all.genes)
-    for (i in 1:nrow(sensitivity.tissues))
-    {
-      if ((sensitivity.tissues[i,"significance"] == "***") | (sensitivity.tissues[i,"significance"] == "**"))
-      {
-        fnCCLE.GDSC(gene, isoform, drug, method = "tissue.based", rownames(sensitivity.tissues)[i], sensitivity.all[,"col"], R2=fnsensitivity.tissues$statistics[[rownames(sensitivity.tissues)[i]]]["median","M3B"], pvalue=fnsensitivity.tissues$p.values[[rownames(sensitivity.tissues)[i]]]["M0","M3B"], annot.ensembl.all.genes)
-      }
-    }
-    dev.off() 
-  }
-  else
-  {
-    pdf(file = file.path(path.diagrams, sprintf("%s_%s_%s_cellLines_all.pdf",gene,annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"],gsub("drugid_","",drug))), height=24, width=16)
-    par(mfrow=c(6, 4))    
-    sensitivity.all <- fnCCLE.tissue(gene, isoform, drug, method = "all.res", "","")
-    for (tissue.type in tissue.types)
-    {
-      fnCCLE.tissue(gene, isoform, drug, method = "tissue.based", tissue.type, sensitivity.all[,"col"], R2 = fnsensitivity.tissues$statistics[[tissue.type]]["median","M3B"], pvalue = fnsensitivity.tissues$p.values[[tissue.type]]["M0","M3B"])
-    }
-    dev.off() 
-    
-    pdf(file = file.path(path.diagrams, sprintf("%s_%s_%s_cellLines_significant.pdf",gene,annot.ensembl.all.genes[which(annot.ensembl.all.genes$EnsemblGeneId == gene),"Symbol"],gsub("drugid_","",drug))), height=8, width=16)
-    par(mfrow=c(2, 4))
-    sensitivity.all = fnCCLE.tissue(gene, isoform, drug, method = "all.res", "")
-    for (i in 1:nrow(sensitivity.tissues))
-    {
-      if ((sensitivity.tissues[i,"significance"] == "***") | (sensitivity.tissues[i,"significance"] == "**"))
-      {
-        fnCCLE.tissue(gene, isoform, drug, method = "tissue.based", rownames(sensitivity.tissues)[i], sensitivity.all[,"col"], R2 = fnsensitivity.tissues$statistics[[rownames(sensitivity.tissues)[i]]]["median","M3B"], pvalue = fnsensitivity.tissues$p.values[[rownames(sensitivity.tissues)[i]]]["M0","M3B"])
-      }
-    }
-    dev.off() 
-  }
-}
-fnCheckIsoform.check <- function(gene, isoform, drug, ccle=FALSE, limit=4, annot.ensembl.all.genes)
-{
-  fnsensitivity.tissues <- fnSensitivity.tissue (gene, isoform, drug)
-  
-  sensitivity <- CCLE$sensitivity
-  n <- table(sensitivity[,"tissue.type"])
-  tissue.types <- names(fnsensitivity.tissues$tissues)
-  sensitivity.tissues <- matrix(NA,nrow= (length(tissue.types) + 1), ncol=5)
-  rownames(sensitivity.tissues) <- c("all",tissue.types)
-  colnames(sensitivity.tissues) <- c("log.pvalue","col","rsquared","n","significance")
-  
-  names.tissues.colors <- colorRampPalette(brewer.pal(n=11, name= 'Spectral'))(length(tissue.types))
-  #c("blue", "green", "Blues", "RdPu", "Greens", "PuRd", "Greys", "Oranges", "PuBuGn", "Purples", "PuBu", "Reds", "YlGn", "YlGnBu", "YlOrBr", "YlOrRd", "BuGn", "BuPu", "GnBu","OrRd")
-  ranges <- c(1,0.75,.7,.65,.60,0)
-  col.tissuetypes.ranges <- matrix(NA,nrow = length(tissue.types), ncol = length(ranges))
-  rownames(col.tissuetypes.ranges) <- tissue.types
-  colnames(col.tissuetypes.ranges) <- ranges
-  for(i in 1:nrow(col.tissuetypes.ranges))
-  {
-    col.tissuetypes.ranges[i,] <-  colorRampPalette(c("white",names.tissues.colors[i]))(length(ranges))
-  }
-  sensitivity.tissues[1,"rsquared"] <- ccle.drug.association.statistics[[gene]][[gsub("drugid_","",drug)]]["median","M3B"]
-  sensitivity.tissues[1,"log.pvalue"] <- -log10(ccle.drug.association[[gene]][[gsub("drugid_","",drug)]]["M0","M3B"])
-  Genedf0 <- data.frame(ccle.drug.sensitivity[,which(colnames(ccle.drug.sensitivity) == drug)])
-  Genedf0[,"Tissue"] <- factor(ccle.drug.tissuetype[,"tissue.type"], ordered =FALSE)
-  sensitivity.tissues[1,"n"] <- nrow(Genedf0[complete.cases(Genedf0),])
-  sensitivity.tissues[1,"col"] <- "grey"
-  sensitivity.tissues[1,"significance"] <- " "
-  for (i in 1:length(tissue.types))
-  {
-    sensitivity.tissues[i+1,"rsquared"] <- fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] * sign(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M3B","M0"])
-    sensitivity.tissues[i+1,"log.pvalue"] <- -log10(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"])
-    sensitivity.tissues[i+1,"n"] <- n[tissue.types[i]]
-    if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .001)
-    {sensitivity.tissues[i+1,"significance"] <- "***"} else if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .01)
-    {sensitivity.tissues[i+1,"significance"] <- "**"} else if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .05)                           
-    {sensitivity.tissues[i+1,"significance"] <- "*"} else if(fnsensitivity.tissues$p.values[[tissue.types[i]]]["M0","M3B"] < .1)                           
-    {sensitivity.tissues[i+1,"significance"] <- "-"} else  {sensitivity.tissues[i+1,"significance"] <- " "}          
-    j <- ncol(col.tissuetypes.ranges)
-    if(fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] <0 ){fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] <- 0}
-    while(fnsensitivity.tissues$statistics[[tissue.types[i]]]["median","M3B"] < as.numeric(colnames(col.tissuetypes.ranges)[j]))
-    {
-      j <- j - 1
-    }
-    sensitivity.tissues[i+1,"col"] <- col.tissuetypes.ranges[tissue.types[i],j]
-  }
-  
-  significant.tissues <- NULL
-  if(drug %in% colnames(gdsc.drug.sensitivity) & !ccle)
-  {
-    sensitivity.all <- fnCCLE.GDSC(gene, isoform, drug, method="all", "", annot.ensembl.all.genes)
-    for (i in 2:nrow(sensitivity.tissues))
-    {
-      if ((sensitivity.tissues[i,"significance"] == "***") | (sensitivity.tissues[i,"significance"] == "**"))
-      {
-        sensitivity.tissue <- fnCCLE.GDSC(gene, isoform, drug, method="tissue.based", rownames(sensitivity.tissues)[i], sensitivity.all[,"col"], annot.ensembl.all.genes)
-        ranks <- which(rownames(sensitivity.all) %in% rownames(sensitivity.tissue))
-        if ((length(ranks) > (limit*2)) && all(ranks[1:limit] < nrow(sensitivity.all)%/%2) && all(ranks[(length(ranks)-limit+1):length(ranks)] > nrow(sensitivity.all)%/%2))
-        {
-          significant.tissues <- c(significant.tissues, rownames(sensitivity.tissues)[i])
-          fnCheckIsoform(gene, isoform, drug, ccle, annot.ensembl.all.genes)
-        }
-      }
-    }
-  }
-  else
-  {
-    sensitivity.all <- fnCCLE.tissue(gene, isoform, drug, method = "all", "")
-    for (i in 1:nrow(sensitivity.tissues))
-    {
-      if ((sensitivity.tissues[i,"significance"] == "***") | (sensitivity.tissues[i,"significance"] == "**"))
-      {
-        sensitivity.tissue <- fnCCLE.tissue(gene, isoform, drug, method = "tissue.based", rownames(sensitivity.tissues)[i], sensitivity.all[,"col"])
-        ranks <- which(rownames(sensitivity.all) %in% rownames(sensitivity.tissue))
-        if ((length(ranks) > (limit*2)) && all(ranks[1:limit] < nrow(sensitivity.all)%/%2) && all(ranks[(length(ranks)-limit+1):length(ranks)] > nrow(sensitivity.all)%/%2))
-        {
-          significant.tissues <- c(significant.tissues, rownames(sensitivity.tissues)[i])
-          fnCheckIsoform(gene, isoform, drug, ccle, annot.ensembl.all.genes)
-        }
-      }
-    }
-  }
-  return (significant.tissues)
-}
-fnPlotTopBiomarkers <- function(top.biomarkers, top.no)
-{
-  drug.col <- c("#666666","#996666","#CC3399","#663399","#66CC00","#336600","#3333CC","#FF3399","#999999","#333333", "#0066CC","#669999","#33CC99","#339900","#CCFF99")
-  top.list <- NULL;
-  for(i in 1:length(top.biomarkers))
-  {
-    for(j in 1:top.no)
-    {
-      top.list <- rbind(top.list, c(names(top.biomarkers)[i],drug.col[i], top.biomarkers[[i]][j,"symbol"],top.biomarkers[[i]][j,"biomarker.id"], -log10(top.biomarkers[[i]][j,adjustment.method]), sign(top.biomarkers[[i]][j,"estimate"])* top.biomarkers[[i]][j,"R2"],top.biomarkers[[i]][j,"type"],top.biomarkers[[i]][j,"specificity"] ))
-    }
-  }
-  colnames(top.list) <- c("drug.id","col","symbol","biomarker.id","pvalue","efficacy","type","specificity")
-  
-  my.ylim <- c(0,15)
-  pdf(file = file.path(path.diagrams, sprintf("top_%s_list.pdf",top.no)), height=7, width=7)  
-  boxplot(as.numeric(top.list[,"pvalue"]) ~top.list[,"specificity"])
-  points(top.list[,"class"],jitter(as.numeric(top.list[,"pvalue"])), pch = 20, col = top.list[,"col"], ji)
-  
-  dev.off()
-}
-
+}  
