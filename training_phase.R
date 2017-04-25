@@ -637,8 +637,8 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
                       (length(results$gdsc[[Models[j]]]) > 0) & 
                       (length(results$gdsc[[Models[k]]]) > 0)){
                      
-                       p.value.ccle <- wilcox.test(results$ccle[[Models[k]]] , results$ccle[[Models[j]]], paired=TRUE, alternative=direction)$p.value
-                       p.value.gdsc <- wilcox.test(results$gdsc[[Models[k]]] , results$gdsc[[Models[j]]], paired=TRUE, alternative=direction)$p.value
+                     p.value.ccle <- wilcox.test(results$ccle[[Models[k]]] , results$ccle[[Models[j]]], paired=TRUE, alternative=direction)$p.value
+                     p.value.gdsc <- wilcox.test(results$gdsc[[Models[k]]] , results$gdsc[[Models[j]]], paired=TRUE, alternative=direction)$p.value
                      P_values[[i]][Models[j],Models[k]] <- p.value.ccle * weight$ccle + p.value.gdsc * weight$gdsc
                    }
                    else{
@@ -732,7 +732,7 @@ fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID,
     i <- i + 1
     names(best.isoforms)[i] <- drug
     best.isoforms[i] <- "-"
-
+    
     P_values[[i]] <- matrix(NA,nrow=length(Models), ncol=length(Models), byrow=FALSE)
     rownames(P_values[[i]]) <- Models
     colnames(P_values[[i]]) <- Models
@@ -972,7 +972,7 @@ if(training.method != "gCSI") {
   load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/gCSI_hs.RData", verbose=TRUE)
   drugs <- PharmacoGx::drugNames(gCSI)
   gCSI.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=gCSI, sensitivity.measure=as.character(sensitivity.method), drugs=drugs))
-
+  
   if(as.character(sensitivity.method)== "slope_recomputed") {
     ##manual cutoff for sensitivity calls based on slope
     cutoff <- 0.27
@@ -999,7 +999,7 @@ if(training.method != "gCSI") {
   gCSI.isoforms.fpkm[which(is.na(gCSI.isoforms.fpkm))] <- 0
   
   gCSI.cells <- intersectList(rownames(gCSI.drug.sensitivity), rownames(gCSI.genes.fpkm), rownames(gCSI.isoforms.fpkm))
-
+  
   GeneList <- colnames(gCSI.genes.fpkm)
   GeneListn <- length(GeneList)
   
@@ -1054,10 +1054,10 @@ for(i in startIndex: finishIndex)
   if(training.method == "ccle_gdsc")
   {
     sensitivity <- fnSensitivityCompare(MicroArrayExp=NULL,
-                                              Gene_FPKM=ccle.genes.fpkm[,Gene],
-                                              Isoforms=fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene),
-                                              GeneID=Gene,
-                                              drugs=drugs)
+                                        Gene_FPKM=ccle.genes.fpkm[,Gene],
+                                        Isoforms=fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene),
+                                        GeneID=Gene,
+                                        drugs=drugs)
   }else if(training.method == "gCSI"){
     sensitivity <- fnSensitivityOneDataSet(MicroArrayExp=NULL,
                                            Gene_FPKM= gCSI.genes.fpkm[,Gene],
