@@ -1,6 +1,17 @@
 require(magicaxis) || stop("Library magicaxis is not available!") #add minor tick marks to the plot
 require("np") || stop("Library np is not available!")
 
+R2gauss<- function(y,model){
+  moy<-mean(y)
+  N<- length(y)
+  p<-length(model$coefficients)-1
+  SSres<- sum((y-predict(model))^2)
+  SStot<-sum((y-moy)^2)
+  R2<-1-(SSres/SStot)
+  Rajust<-1-(((1-R2)*(N-1))/(N-p-1))
+  return(data.frame(R2,Rajust,SSres,SStot))
+}
+
 rsq <- function(model, indices) {
   
   indices <- unique(indices)
