@@ -41,13 +41,14 @@ fnValidateWithGray <- function(biomarker, method=c("common","all"), my.xlim, my.
     if(stat=="r.squared"){
       gray.stat <- summary(gray.model)$r.squared
     }else if(stat=="cindex"){
-      gray.stat <- survcomp::concordance.index(x=-predict(gray.model), surv.time=sensitivity[, phenotype], surv.event=rep(1, nrow(sensitivity)), na.rm=TRUE, outx=TRUE)[[1]]
+      #gray.stat <- survcomp::concordance.index(x=-predict(gray.model), surv.time=sensitivity[, phenotype], surv.event=rep(1, nrow(sensitivity)), na.rm=TRUE, outx=TRUE)[[1]]
+      gray.stat <- Hmisc::rcorr.cens(x=predict(gray.model), S=sensitivity[, phenotype], outx=TRUE)[[1]]
     }
   }
   #lm compue two sided pvalue
   gray.pvalue <- gray.pvalue / 2
   textxy(my.xlim[1], my.ylim[2] - .08, sprintf("In GRAY model (Linear Regression)\n pvalue=%s\n%s=%s\nestimate=%s", round(gray.pvalue, digits=10), stat, round(gray.stat, digits=2), round(gray.estimate, digits=2)), cex=0.6)
-  return(list(pvalue=gray.pvalue, estimate=gray.estimate, n=gray.n))
+  return(list(pvalue=gray.pvalue, estimate=gray.estimate, n=gray.n, stat=gray.stat))
 }
 fnPlotCCLEGDSC <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
   
@@ -275,11 +276,13 @@ fnValidation <- function(top.significant.biomarkers, validation.cut.off) {
           rr[[drug.name]][i, "all.gray.n"] <- gray$n
           rr[[drug.name]][i, "all.gray.pvalue"] <- gray$pvalue
           rr[[drug.name]][i, "all.gray.estimate"] <- gray$estimate
+          rr[[drug.name]][i, "all.gray.stat"] <- gray$stat
           
           gray <- fnValidateWithGray(biomarker, method="common", color="#336600", drug=drug)
           rr[[drug.name]][i, "common.gray.n"] <- gray$n
           rr[[drug.name]][i, "common.gray.pvalue"] <- gray$pvalue
           rr[[drug.name]][i, "common.gray.estimate"] <- gray$estimate
+          rr[[drug.name]][i, "common.gray.stat"] <- gray$stat
           
           rr[[drug.name]][i, "biotype"] <- annot.ensembl.all.genes[biomarker$gene.id, "GeneBioType"]
         }

@@ -18,8 +18,13 @@ stat <- "cindex"
 validation.method <- stat
 RNA_seq.normalize <- TRUE
 
-load(file.path(path.data, "PSets/CCLE_hs.RData"))
-load(file.path(path.data, "PSets/GDSC.RData"))
+#load(file.path(path.data, "PSets/CCLE_hs.RData"), verbose=TRUE)
+load(file.path(path.data, "PSets/CCLE.CTRPv2.RData"), verbose=TRUE)
+CCLE <- CCLE.CTRPv2
+
+#load(file.path(path.data, "PSets/GDSC.RData"), verbose=TRUE)
+load(file.path(path.data, "PSets/GDSC1000.RData"), verbose=TRUE)
+GDSC <- GDSC1000
 load(file.path(path.data, "PSets/GRAY_hs.RData"))
 load(file.path(path.data, "PSets/UHN_hs.RData"))
 
@@ -33,7 +38,11 @@ gray.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GRAY, s
 gray.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=GRAY, mDataType="rnaseq", fill.missing=FALSE)))
 gray.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=GRAY, mDataType="isoforms", fill.missing=FALSE)))
 
-uhn.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=UHN, sensitivity.measure=sensitivity.type))
+drugs <- intersectList(colnames(ccle.drug.sensitivity), 
+                       colnames(gdsc.drug.sensitivity),
+                       colnames(gray.drug.sensitivity),
+                       drugNames(UHN))
+uhn.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=UHN, drugs=drugs, sensitivity.measure=sensitivity.type))
 uhn.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=UHN, mDataType="rnaseq", fill.missing=FALSE)))
 uhn.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=UHN, mDataType="isoforms", fill.missing=FALSE)))
 
@@ -67,7 +76,7 @@ for(drug in drugs) {
   biomarkers[[drug]][, c("UHN.estimate", "UHN.pvalue", paste0("UHN.",stat), "gene.biotype")] <- NA
   biomarkers[[drug]][,"id"] <- biomarkers[[drug]][,"biomarker.id"]
   tt <- biomarkers[[drug]]
-  tt <- tt[which(tt[,"ccle"] > 0),,drop=F]
+  #tt <- tt[which(tt[,"ccle"] > 0),,drop=F]
   vtt <- tt[which(tt[,"validation.stat"] == "validated"),,drop=F]
   #vtt <- subset(vtt, vtt$gray.specificity == "isoform.specific")
   vtt <- vtt[which(vtt[,"type"] == "isoform"),,drop=F]
@@ -110,7 +119,12 @@ for(drug in drugs) {
     {
       uhn.models[marker,"pvalue"] <- summary(uhn.model)$coefficients[2,4]
       uhn.models[marker,"estimate"] <- summary(uhn.model)$coefficients[2,1]
-      uhn.models[marker,stat] <- summary(uhn.model)$adj.r.squared
+      if(stat == "r.squared"){
+        uhn.models[marker, stat] <- summary(uhn.model)$r.squared
+      }
+      if(stat == "cindex"){
+        uhn.models[marker, stat] <- Hmisc::rcorr.cens(x=predict(uhn.model), S=sensitivity, outx=TRUE)[[1]]
+      }
       uhn.models[marker,"gene_biotype"] <- annot.ensembl.all.transcripts[marker, "TranscriptBioType"]
     }
   }
@@ -346,11 +360,19 @@ for(drug in names(biomarkers)) {
       tt[1:(nrow(ccle.isoforms.fpkm.breast) + nrow(gray.isoforms.fpkm) + nrow(uhn.isoforms.fpkm)),1] <- c(ccle.isoforms.fpkm.breast[ , ensembl.id], 
                                                                                                                        gray.isoforms.fpkm[ , ensembl.id],
                                                                                                                        uhn.isoforms.fpkm[ , ensembl.id])
-      tt[1:length(tumor.tcga),2] <- exprs(TCGA_BRCA_isoforms)[ensembl.id, tumor.tcga]
+      if( ensembl.id %in% colnames(exprs(TCGA_BRCA_isoforms))){
+        tt[1:length(tumor.tcga),2] <- exprs(TCGA_BRCA_isoforms)[ensembl.id, tumor.tcga]
+      }else{
+        tt[1:length(tumor.tcga),2] <- NA
+      }
       #tt[1:length(normal.tcga),3] <- exprs(TCGA_BRCA_isoforms)[ensembl.id, normal.tcga]
       
       #tt[1:ncol(exprs(GTex.BR$isoforms)),4] <- exprs(GTex.BR$isoforms)[ensembl.id, ]
-      tt[1:ncol(exprs(GTex.BR$isoforms)),3] <- exprs(GTex.BR$isoforms)[ensembl.id, ]
+      if( ensembl.id %in% colnames(exprs(GTex.BR$isoforms))){
+        tt[1:ncol(exprs(GTex.BR$isoforms)),3] <- exprs(GTex.BR$isoforms)[ensembl.id, ]
+      }else{
+        tt[1:ncol(exprs(GTex.BR$isoforms)),3] <- NA
+      }
       
       #boxplot(tt, col = mycol, main = sprintf("%s-%s (%s)", all.biomarkers[[i]][j,"symbol"], all.biomarkers[[i]][j,"type"], validation.stat), pch = 20)
       par(cex.lab=1.8)

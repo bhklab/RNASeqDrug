@@ -61,11 +61,16 @@ if(sensitivity.type == "slope_recomputed")
   path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
 }
 load(file.path(path.data, "PSets/GRAY_hs.RData"))
-annot.ensembl.all.genes <- Biobase::fData(CCLE@molecularProfiles$rnaseq)
 gray.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GRAY, sensitivity.measure=sensitivity.type))
 
-load(file.path(path.data, "PSets/CCLE_hs.RData"))
-load(file.path(path.data, "PSets/GDSC.RData"))
+#load(file.path(path.data, "PSets/CCLE_hs.RData"), verbose=TRUE)
+load(file.path(path.data, "PSets/CCLE.CTRPv2.RData"), verbose=TRUE)
+CCLE <- CCLE.CTRPv2
+
+#load(file.path(path.data, "PSets/GDSC.RData"), verbose=TRUE)
+load(file.path(path.data, "PSets/GDSC1000.RData"), verbose=TRUE)
+GDSC <- GDSC1000
+annot.ensembl.all.genes <- Biobase::fData(CCLE@molecularProfiles$rnaseq)
 if(training.type == "CCLE_GDSC") {
 #  common <- PharmacoGx::intersectPSet(pSets=list("CCLE"=CCLE, "GDSC"=GDSC), strictIntersect=F)
 #  cells <- intersect(common$CCLE@cell$cellid, pData(common$CCLE@molecularProfiles$isoforms)[,"cellid"])

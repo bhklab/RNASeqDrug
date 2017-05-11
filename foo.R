@@ -262,7 +262,10 @@ compute.stat <- function(stat, yi, y.hat){
     TSS <- sum((yi - mean(yi))^2)
     return(1-(RSS/TSS))
   }else if(stat == "cindex"){
-    return(survcomp::concordance.index(x=-y.hat, surv.time=yi, surv.event=rep(1, length(yi)), na.rm=TRUE, outx=TRUE)[[1]])
+    #return(survcomp::concordance.index(x=-y.hat, surv.time=yi, surv.event=rep(1, length(yi)), na.rm=TRUE, outx=TRUE)[[1]])
+    return(Hmisc::rcorr.cens(x=y.hat, S = yi, outx=TRUE)[[1]])  
+    #survcomp::concordance.index(x=-y.hat, surv.time=yi, surv.event=rep(1, length(yi)), na.rm=TRUE, outx=TRUE)[[1]]
+    #Hmisc::rcorr.cens(x=y.hat, S = yi, outx=TRUE)[[1]]
   }
 }
 plot.multi <- function(x,y){

@@ -1467,8 +1467,8 @@ fnidentify.tissue.specific.biomarkers <- function(biomarkers, boot=FALSE) {
               if(!is.null(M3B$ccle) && !is.null(M3B$gdsc)){if(!is.na(M3B$ccle$coefficient) && !is.na(M3B$gdsc$coefficient)){if((sign(M3B$ccle$coefficient) != sign(M3B$gdsc$coefficient)) || M3B$ccle$coefficient == 0 || M3B$gdsc$coefficient == 0){M3B$ccle <- NULL; M3B$gdsc <- NULL}}}
               if(!is.null(M3B$ccle) && !is.null(M3B$gdsc))
               {
-                ccle.stat <- compute.stat(stat, M3B$ccle$dataset$drug, fitted(M3B$ccle$model))
-                gdsc.stat <- compute.stat(stat, M3B$gdsc$dataset$drug, fitted(M3B$gdsc$model))
+                ccle.stat <- compute.stat(stat, yi=M3B$ccle$dataset$drug, y.hat=fitted(M3B$ccle$model))
+                gdsc.stat <- compute.stat(stat, yi=M3B$gdsc$dataset$drug, y.hat=fitted(M3B$gdsc$model))
                 
                 if(nrow(summary(M3B$ccle$model)$coefficients) == 2){ ccle.pvalue <- summary(M3B$ccle$model)$coefficients[2, 4]} else{ ccle.pvalue <- 1}
                 if(nrow(summary(M3B$gdsc$model)$coefficients) == 2){ gdsc.pvalue <- summary(M3B$gdsc$model)$coefficients[2, 4]} else{ gdsc.pvalue <- 1}

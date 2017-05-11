@@ -285,6 +285,9 @@ fnCor <- function(drug, gene, xx) {
   diag(xx) <- NA
   quantile.range <- quantile(xx[xx > 0], probs = seq(0, 1, 0.01), na.rm=T)
   palette.breaks <- seq(quantile.range["0%"], quantile.range["100%"], 0.1)
+  if(length(palette.breaks) == 1){
+    palette.breaks <- c(palette.breaks, 1)
+  }
   color.palette  <- colorRampPalette(c("white", red))(length(palette.breaks))
   
   if(any(xx < 0, na.rm=TRUE)){

@@ -28,13 +28,13 @@ RNA_seq.normalize <- TRUE
 
 source(file.path(path.code, "foo.R"))
 
-#load(file.path(path.data, "PSets/CCLE_hs.RData"), verbose=TRUE)
-load(file.path(path.data, "PSets/CCLE.CTRPv2.RData"), verbose=TRUE)
-CCLE <- CCLE.CTRPv2
+load(file.path(path.data, "PSets/CCLE_hs.RData"), verbose=TRUE)
+#load(file.path(path.data, "PSets/CCLE.CTRPv2.RData"), verbose=TRUE)
+#CCLE <- CCLE.CTRPv2
 
-#load(file.path(path.data, "PSets/GDSC.RData"), verbose=TRUE)
-load(file.path(path.data, "PSets/GDSC1000.RData"), verbose=TRUE)
-GDSC <- GDSC1000
+load(file.path(path.data, "PSets/GDSC.RData"), verbose=TRUE)
+#load(file.path(path.data, "PSets/GDSC1000.RData"), verbose=TRUE)
+#GDSC <- GDSC1000
 
 load(file.path(path.data, file.sensitivity), verbose=T)
 if(length(drug.association)==2) {
@@ -354,7 +354,7 @@ save(associations, file=file.path(path.diagrams, "associations.RData"))
 
 ##all.biomarkers would include all the significant biomarkers
 all.biomarkers <- fnTop.significant.biomarkers(associations, cut_off=0.01, BioNo="all", rank.type="pvalue.adj")
-save(all.biomarkers, file=file.path(path.diagrams, "all.biomarkers.RData"))
+save(all.biomarkers, file=file.path(path.diagrams, "all.biomarkers.original.RData"))
 
 if(!breast.specific)
 {
