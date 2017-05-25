@@ -1,54 +1,261 @@
 require(gplots) || stop("Library gplots is not available!")
-fnValidateWithGray <- function(biomarker, method=c("common","all"), my.xlim, my.ylim, color, drug) {
-  exp.type <- paste0(biomarker$type, ".exp")
-  
+fnValidation <- function(top.significant.biomarkers, validation.cut.off, validation.method=c(effect.size, "pvalue"), effect.size.cut.off=0.55, pvalue.cut.off=0.05, plot.create=FALSE, common.cells=FALSE) {
+  rr <- list()
+  for(drug in drugs) {
+    if(!all(is.na(top.significant.biomarkers[[drug]]))) {
+      top.significant.biomarkers.drug <- top.significant.biomarkers[[drug]]
+      if(validation.method==effect.size) {
+        #  top.significant.biomarkers.drug <- top.significant.biomarkers.drug[which(top.significant.biomarkers.drug$effect.size <= top.significant.biomarkers.drug$breast), , drop=FALSE]
+        top.significant.biomarkers.drug <- top.significant.biomarkers.drug[which(top.significant.biomarkers.drug$breast >= effect.size.cut.off), , drop=FALSE]
+      } else {
+        top.significant.biomarkers.drug <- top.significant.biomarkers.drug[which(top.significant.biomarkers.drug[ ,paste0(tissue, "_pvalue")] < pvalue.cut.off), , drop=FALSE]
+      }
+      ##The validation can be done on the most significant biomarkers which the number of significant biomarkers is determined by validation.cut.off
+      top.significant.biomarkers.drug.5 <- NULL
+      specificities <- table(top.significant.biomarkers.drug$specificity)
+      for(spec in names(specificities)) {
+        top.significant.biomarkers.drug.5 <- rbind(top.significant.biomarkers.drug.5, subset(top.significant.biomarkers.drug, specificity == spec)[1:min(validation.cut.off, specificities[spec], na.rm=TRUE),])
+      }
+      top.significant.biomarkers.drug <- top.significant.biomarkers.drug.5[order(top.significant.biomarkers.drug.5$rank),]
+      biomarkers.no <- nrow(top.significant.biomarkers.drug)
+      rr[[drug]] <- top.significant.biomarkers.drug
+      
+      if(plot.create) {
+        pdf(file=file.path(path.diagrams, sprintf("%s.pdf", drug)), height=4 * (plots.no + 1), width=16)
+        par(mfrow=c((plots.no + 1), 4))
+        
+        if(training.type == "CCLE_GDSC") {
+          fnPlotAUC(first="ccle", second="gdsc", drug, tissue.type="all", color="#666666")
+          fnPlotAUC(first="ccle", second="gdsc", drug, tissue.type=tissue, color="#996666")
+          fnPlotAUC(first="ccle", second="gray", drug, tissue.type="", color="#CC3399")
+          fnPlotAUC(first="gray", second="gdsc", drug, tissue.type="", color="#663399")
+        }else {
+          fnPlotAUC(first="ccle", second="gray", drug, tissue.type="", color="#CC3399")
+          plot.new()
+          plot.new()
+          plot.new()
+        }
+      }
+      for(i in 1:biomarkers.no) {
+        biomarker <- fnDefineBiomarker (gene.id=as.character(top.significant.biomarkers.drug[i, "gene.id"]), 
+                                        isoform.id=as.character(top.significant.biomarkers.drug[i, "transcript.id"]), 
+                                        estimate=as.numeric(top.significant.biomarkers.drug[i, "estimate"]),
+                                        pvalue=as.numeric(top.significant.biomarkers.drug[i, adjustment.method]), 
+                                        effect.size=as.numeric(top.significant.biomarkers.drug[i, effect.size]), 
+                                        type=as.character(top.significant.biomarkers.drug[i, "type"]))
+        f <- FALSE
+        if(biomarker$type == "isoform") {f <- biomarker$id %in% colnames(gray.isoforms.fpkm) & !all(is.na(gray.isoforms.fpkm[,biomarker$id]))}
+        if(biomarker$type == "gene") {f <- biomarker$id %in% colnames(gray.genes.fpkm) & !all(is.na(gray.genes.fpkm[,biomarker$id]))}
+        if (f) {
+          if(plot.create) {
+            if(training.type == "CCLE_GDSC") {
+              fnPlotEXP(first=paste0("ccle.", biomarker$type), second=paste0("gray.", biomarker$type), biomarker)    
+              fnPlotCCLEGDSC(biomarker, tissue.type=tissue, drug=drug)
+            }else {
+              fnPlotCCLE(biomarker, tissue.type=tissue, drug=drug)
+            }
+          }
+          if(common.cells) {
+            gray <- fnValidateWithGray(biomarker, cells="common", color="#336600", drug=drug, plot.create, validation.method=effect.size, validation.cut.off=effect.size.cut.off)
+          }else {
+            gray <- fnValidateWithGray(biomarker, cells="all", color="#66CC00", drug=drug, plot.create, validation.method=effect.size, validation.cut.off=effect.size.cut.off)
+          }
+          rr[[drug]][i, "gray.n"] <- gray$n
+          rr[[drug]][i, "gray.pvalue"] <- gray$pvalue
+          rr[[drug]][i, "gray.estimate"] <- gray$estimate
+          rr[[drug]][i, "gray.effect.size"] <- gray$effect.size
+          rr[[drug]][i, "validation.stat"] <- gray$validation.stat
+          rr[[drug]][i, "biotype"] <- annot.ensembl.all.genes[biomarker$gene.id, "GeneBioType"]
+        }
+      }
+      if(plot.create) {
+        dev.off()
+      }
+    }
+  }
+  return(rr)
+}
+fnValidateWithGray <- function(biomarker, cells=c("common","all"), my.xlim, my.ylim, color, drug, plot.create=FALSE, validation.method=c(effect.size, "pvalue"), validation.cut.off) {
   gray.sensitivity <- subset(gray.drug.sensitivity, !is.na(gray.drug.sensitivity[, drug]) , select=drug)
   intersected.celllines.gray <- intersect(rownames(gray.sensitivity), rownames(gray.genes.fpkm))
-  if(method == "common"){
+  if(cells=="common") {
     intersected.celllines.gray <-  intersect(intersected.celllines.gray, rownames(ccle.genes.fpkm))
   }
-  if(exp.type == "gene.exp")
-  {
+  if(biomarker$type=="gene") {
     sensitivity <- data.frame(cbind(gray.sensitivity[intersected.celllines.gray, drug], gray.genes.fpkm[intersected.celllines.gray, biomarker$gene.id]))
-  }else{
+  }else {
     sensitivity <- data.frame(cbind(gray.sensitivity[intersected.celllines.gray, drug], gray.isoforms.fpkm[intersected.celllines.gray, biomarker$isoform.id]))
   }
-  sensitivity <- sensitivity[complete.cases(sensitivity),]
-  colnames(sensitivity) <- c(phenotype, exp.type)
+  sensitivity <- sensitivity[complete.cases(sensitivity), ,drop=FALSE]
+  colnames(sensitivity) <- c(phenotype, "exprs")
+  
   gray.n <- nrow(sensitivity)
-  
-  my.xlim <- range(as.numeric(sensitivity[, exp.type]), na.rm=TRUE)
-  my.ylim <- range(as.numeric(sensitivity[, phenotype]), na.rm=TRUE)
-  
-  
-  
-  plot(NA, xlim=my.xlim, ylim=my.ylim, xlab=biomarker$label, ylab=phenotype, cex.lab=.7, cex.axis=.7)
-  points(sensitivity[, exp.type], sensitivity[, phenotype], pch=17, col=color)
-  title(sprintf("GRAY-%s\n%s and %s", toupper(method), biomarker$type, gsub("drugid_", "", drug)), cex.main=.8)
-  
-  if(biomarker$type == "gene")
-  {
-    gray.model <- lm(sensitivity[, phenotype]  ~ sensitivity[ , "gene.exp"])
-  }else{
-    gray.model <- lm(sensitivity[, phenotype] ~ sensitivity[ , "isoform.exp"])    
-  }
+  gray.model <- lm(sensitivity[, phenotype]  ~ sensitivity[ , "exprs"])
   gray.pvalue <- 2 
-  gray.estimate <- gray.stat <- 0
+  gray.estimate <- gray.effect.size <- 0
   if(all(!is.na(gray.model)) & !is.na(gray.model$coefficients[2]))
   {
-    gray.pvalue <- summary(gray.model)$coefficients[2,4]
-    gray.estimate <- summary(gray.model)$coefficients[2,1]
-    if(stat=="r.squared"){
-      gray.stat <- summary(gray.model)$r.squared
-    }else if(stat=="cindex"){
-      #gray.stat <- survcomp::concordance.index(x=-predict(gray.model), surv.time=sensitivity[, phenotype], surv.event=rep(1, nrow(sensitivity)), na.rm=TRUE, outx=TRUE)[[1]]
-      gray.stat <- Hmisc::rcorr.cens(x=predict(gray.model), S=sensitivity[, phenotype], outx=TRUE)[[1]]
+    gray.pvalue <- summary(gray.model)$coefficients[2, 4]
+    gray.estimate <- summary(gray.model)$coefficients[2, 1]
+    if(effect.size=="r.squared"){
+      gray.effect.size <- summary(gray.model)$r.squared
+    }else if(effect.size=="cindex"){
+      #gray.effect.size <- survcomp::concordance.index(x=-predict(gray.model), surv.time=sensitivity[, phenotype], surv.event=rep(1, nrow(sensitivity)), na.rm=TRUE, outx=TRUE)[[1]]
+      gray.effect.size <- Hmisc::rcorr.cens(x=predict(gray.model), S=sensitivity[, phenotype], outx=TRUE)[[1]]
     }
   }
   #lm compue two sided pvalue
   gray.pvalue <- gray.pvalue / 2
-  textxy(my.xlim[1], my.ylim[2] - .08, sprintf("In GRAY model (Linear Regression)\n pvalue=%s\n%s=%s\nestimate=%s", round(gray.pvalue, digits=10), stat, round(gray.stat, digits=2), round(gray.estimate, digits=2)), cex=0.6)
-  return(list(pvalue=gray.pvalue, estimate=gray.estimate, n=gray.n, stat=gray.stat))
+  if(plot.create) {
+    my.xlim <- range(as.numeric(sensitivity[, "exprs"]), na.rm=TRUE)
+    my.ylim <- range(as.numeric(sensitivity[, phenotype]), na.rm=TRUE)
+    plot(NA, xlim=my.xlim, ylim=my.ylim, xlab=biomarker$label, ylab=phenotype, cex.lab=.7, cex.axis=.7)
+    points(sensitivity[, "exprs"], sensitivity[, phenotype], pch=17, col=color)
+    title(sprintf("GRAY-%s\n%s and %s", toupper(method), biomarker$type, gsub("drugid_", "", drug)), cex.main=.8)
+    textxy(my.xlim[1], my.ylim[2] - .08, sprintf("In GRAY model (Linear Regression)\n pvalue=%s\n%s=%s\nestimate=%s", round(gray.pvalue, digits=10), effect.size, round(gray.effect.size, digits=2), round(gray.estimate, digits=2)), cex=0.6)
+  }
+  validation.stat <- "unvalidated"
+  if(validation.method=="pvalue") {
+    if(!is.na(gray.pvalue)) {
+      if(as.numeric(gray.pvalue) < validation.cut.off & 
+         sign(as.numeric(gray.estimate)) == sign(as.numeric(biomarker$estimate))) {validation.stat <- "validated"}
+    }
+  } else {
+    if(!is.na(gray.effect.size)) {
+      if(as.numeric(gray.effect.size) >= validation.cut.off & 
+         sign(as.numeric(gray.estimate)) == sign(as.numeric(biomarker$estimate))) {validation.stat <- "validated"}
+    }
+  }
+  return(list(pvalue=gray.pvalue, estimate=gray.estimate, n=gray.n, effect.size=gray.effect.size, validation.stat=validation.stat))
+}
+fnDefineBiomarker <- function(gene.id, isoform.id, estimate, pvalue, effect.size, type) {
+  biomarker <- list()
+  biomarker[["gene.id"]] <- gene.id
+  biomarker[["isoform.id"]] <- isoform.id
+  
+  biomarker[["pvalue"]] <- pvalue
+  biomarker[["effect.size"]] <- effect.size
+  biomarker[["estimate"]] <- estimate
+  biomarker[["type"]] <- type
+  biomarker[["label"]] <- annot.ensembl.all.genes[which(annot.ensembl.all.genes[ , "EnsemblGeneId"] == gene.id), "Symbol"]
+  biomarker[["short.label"]] <- biomarker[["label"]]
+  
+  if(biomarker[["type"]] == "gene") {
+    biomarker[["id"]] <- biomarker[["gene.id"]]
+  }else {
+    biomarker[["label"]] <- sprintf("%s(%s)", biomarker[["isoform.id"]], biomarker[["label"]])
+    biomarker[["short.label"]] <- sprintf("%s.ISO", biomarker[["short.label"]])
+    biomarker[["id"]] <- biomarker[["isoform.id"]]
+  }
+  return(biomarker)
+}
+fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue")) {
+  ccle.breast.cells <- rownames(ccle.tissuetype)[which(ccle.tissuetype[ , "tissue.type"]=="breast")]
+  ccle.breast.cells <- intersectList(ccle.breast.cells, rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
+  ccle.breast.genes <- ccle.genes.fpkm[ccle.breast.cells, , drop=FALSE]
+  ccle.breast.isoforms <- ccle.isoforms.fpkm[ccle.breast.cells, , drop=FALSE]
+  
+  gray.breast.genes <- gray.genes.fpkm 
+  gray.breast.isoforms <- gray.isoforms.fpkm 
+  
+  gtex.breast.genes <- t(exprs(GTex.BR$genes))
+  gtex.breast.isoforms <-  t(exprs(GTex.BR$isoforms))
+  
+  breast.no <- max(max(nrow(gtex.breast.genes), nrow(ccle.breast.genes)), nrow(gray.breast.genes))
+  mycol <- RColorBrewer::brewer.pal(n=8, name="Set2")[c(3, 4, 6)]
+  
+  for(i in 1:length(all.biomarkers)) {
+    no <- nrow(all.biomarkers[[i]])
+    if(no > 0) {
+      nn <- ifelse(no >= 4, no%/%4, 1)
+      pdf(file=file.path(path.diagrams, sprintf("%s_exp_%s.pdf", names(all.biomarkers)[i], validation.method)), width=14, height=3.5 * nn)
+      par(mfrow=c(nn,4))
+      for( j in 1:nrow(all.biomarkers[[i]])){
+        validation.stat <- all.biomarkers[[i]][j, "validation.stat"]
+        if(!is.na(all.biomarkers[[i]][j, "gray.pvalue"]))
+        {
+          if(all.biomarkers[[i]][j, "type"] == "gene") {
+            ensembl.id <- rownames(annot.ensembl.all.genes)[which(annot.ensembl.all.genes[ , "EnsemblGeneId"] == all.biomarkers[[i]][j, "gene.id"])]
+            all.biomarkers[[i]][j, "ccle"] <- median(ccle.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])])
+            all.biomarkers[[i]][j, "gray"] <- median(gray.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])])
+            if(ensembl.id %in% colnames(gtex.breast.genes)) {
+              all.biomarkers[[i]][j, "gtex"] <- median(gtex.breast.genes[, ensembl.id])
+            }else {
+              all.biomarkers[[i]][j, "gtex"] <- NA
+            }
+            tt <- matrix(NA, ncol=3, nrow=breast.no)
+            colnames(tt) <- c("CCLE", "GRAY", "GTEX")
+            tt[1:nrow(ccle.breast.genes),1] <- ccle.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])]
+            tt[1:nrow(gray.breast.genes),2] <- gray.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])]
+            if(ensembl.id %in% colnames(gtex.breast.genes)) {
+              tt[1:nrow(gtex.breast.genes),3] <- gtex.breast.genes[, ensembl.id]
+            }
+          }else{ ##isoform
+            all.biomarkers[[i]][j, "ccle"] <- median(ccle.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])])
+            all.biomarkers[[i]][j, "gray"] <- median(gray.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])])
+            if(as.character(all.biomarkers[[i]][j, "transcript.id"]) %in% colnames(gtex.breast.isoforms)){
+              all.biomarkers[[i]][j, "gtex"] <- median(gtex.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])])
+            }else{
+              all.biomarkers[[i]][j, "gtex"] <- NA
+            }
+            tt <- matrix(NA, ncol=3, nrow=breast.no)
+            colnames(tt) <- c("CCLE", "GRAY", "GTEX")
+            tt[1:nrow(ccle.breast.isoforms),1] <- ccle.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])]
+            tt[1:nrow(gray.breast.isoforms),2] <- gray.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])]
+            if(as.character(all.biomarkers[[i]][j, "transcript.id"]) %in% colnames(gtex.breast.isoforms)){
+              tt[1:nrow(gtex.breast.isoforms),3] <- gtex.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])]
+            }
+          }
+          #boxplot(tt, col=mycol, main=sprintf("%s-%s (%s)", all.biomarkers[[i]][j, "symbol"], all.biomarkers[[i]][j, "type"], validation.stat), pch=20)
+          invisible(genefu::boxplotplus2(t(tt),
+                                         .ylim=c(0,9.5),
+                                         pt.col=mycol,
+                                         #names=c(paste0("none (", length(res.nosignifseeds), ")"), paste0("all (", length(res.allsignifseeds), ")")),
+                                         ylab="expression", 
+                                         #xlab="signif seeds (# of targets)",
+                                         main=sprintf("%s-%s (%s)", all.biomarkers[[i]][j, "symbol"], all.biomarkers[[i]][j, "type"], validation.stat),
+                                         #.las=2,
+                                         pt.cex=1))
+          train <- test <- NA
+          if(!all(is.na(tt[,3]))) {
+            train <- wilcox.test(tt[,1], tt[,3], alternative="greater")$p.value
+            test <- wilcox.test(tt[,2], tt[,3], alternative="greater")$p.value
+          }
+          legend("topright", legend=c(sprintf("CCLE > GTEX : %s", round(train, digits=25)), sprintf("GRAY > GTEX : %s", round(test, digits=25))), fill=mycol[1:2], bty="n")
+          all.biomarkers[[i]][j, "Gtex.train.sit"] <-  train
+          all.biomarkers[[i]][j, "Gtex.test.sit"] <- test
+        }
+      }
+      dev.off()
+    }
+  }
+  
+  tt <- lapply(all.biomarkers, function(x){table(x$validation.stat, ifelse(x$Gtex.train.sit< 0.05, "Lower", "Greater"))})
+  validated.gtex.lower <- sapply(tt, function(x){if(("validated" %in% rownames(x)) & "Lower" %in% colnames(x)) {x["validated", "Lower"]/sum(x[, "Lower"])}else{0}})
+  validated.gtex.greater <- sapply(tt, function(x){if(("validated" %in% rownames(x)) & "Greater" %in% colnames(x)) {x["validated", "Greater"]/sum(x[, "Greater"])} else {0}})
+  validated.all <- sapply(tt, function(x){if("validated" %in% rownames(x)) {sum(x["validated",])/sum(x)} else {0}})  
+  biomarkers.no <- sapply(all.biomarkers, function(x){nrow(x)})
+  isoformstt <- lapply(all.biomarkers, function(x){table(x$validation.stat, x$type)})
+  validated.isoforms <- sapply(isoformstt, function(x){if(("validated" %in% rownames(x)) & ("isoform" %in% colnames(x))){x["validated", "isoform"]/sum(x[, "isoform"])} else {0}})
+  validated.genes <- sapply(isoformstt, function(x){if(("validated" %in% rownames(x)) & ("gene" %in% colnames(x))) {x["validated", "gene"]/sum(x[, "gene"])} else{0}})
+  
+  WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(path.diagrams, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
+  save(all.biomarkers, file=file.path(path.diagrams, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
+  
+  validation.res <- cbind("gtex.lower"=validated.gtex.lower, 
+                          "gtex.greater"=validated.gtex.greater, 
+                          "all"=validated.all, 
+                          "isoform"=validated.isoforms,
+                          "gene"=validated.genes)
+  write.csv(cbind(validation.res,
+                  "biomarkers.no"=biomarkers.no), file.path(path.diagrams, sprintf("validated.regarding.gtex.%s.csv", validation.method)))
+  pdf(file.path(path.diagrams, sprintf("validated.biomarkers.proportion.%s.pdf", validation.method)), height=7 , width=7)
+  mycol <- RColorBrewer::brewer.pal(n=8, name="Set2")[1:5]
+  par(mar=c(7,5,5,6))
+  par(oma=c(2,2,2,2))
+  barplot(t(validation.res), beside=T, las =2, col=mycol, main="Validated breast biomarkers proportion in several categories", ylim=c(0,1))
+  legend("topright", legend=colnames(validation.res), fill=mycol, bty="n")
+  dev.off()
 }
 fnPlotCCLEGDSC <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
   
@@ -100,7 +307,7 @@ fnPlotCCLEGDSC <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
   ri <- 1:3
   #textxy(as.numeric(sensitivity[ri, "isoform.exp"]), as.numeric(sensitivity[ri, "ccle.AUC"]), rownames(sensitivity)[ri], cex=0.7)
   
-  textxy(my.xlim[1] , my.ylim[2] - .08, sprintf("In CCLE/GDSC model \n adj pvalue=%s\n    %s=%s\n estimate=%s", round(biomarker$pvalue, digits=10), stat, round(biomarker$stat, digits=2), round(biomarker$estimate, digits=2)), cex=0.6)
+  textxy(my.xlim[1] , my.ylim[2] - .08, sprintf("In CCLE/GDSC model \n adj pvalue=%s\n    %s=%s\n estimate=%s", round(biomarker$pvalue, digits=10), effect.size, round(biomarker$effect.size, digits=2), round(biomarker$estimate, digits=2)), cex=0.6)
   
   title(sprintf("CCLE/GDSC\n%s and %s in %s cell lines", biomarker$label, gsub("drugid_", "", drug), tissue.type), cex.main=.8)
   
@@ -129,7 +336,7 @@ fnPlotCCLE <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
   y <- c(round(my.ylim[2], digits=1) - 0.1, round(my.ylim[2], digits=1) - 0.1, round(my.ylim[2], digits=1), round(my.ylim[2], digits=1))
   #legend.gradient(cbind(x, y), cols=colorRampPalette(c("blue" , "light blue", "red"))( nrow(sensitivity) ), title="gdsc.AUC", limits=c("resistent", "sensitive"), cex=.7)
   
-  textxy(my.xlim[1] , my.ylim[2] - .08, sprintf("In CCLE model \n adj pvalue=%s\n    %s=%s\n estimate=%s", round(biomarker$pvalue, digits=10), stat, round(biomarker$stat, digits=2), round(biomarker$estimate, digits=2)), cex=0.6)
+  textxy(my.xlim[1] , my.ylim[2] - .08, sprintf("In CCLE model \n adj pvalue=%s\n    %s=%s\n estimate=%s", round(biomarker$pvalue, digits=10), effect.size, round(biomarker$effect.size, digits=2), round(biomarker$estimate, digits=2)), cex=0.6)
   
   title(sprintf("CCLE\n%s and %s in %s cell lines", biomarker$label, gsub("drugid_", "", drug), tissue.type), cex.main=.8)
   
@@ -190,239 +397,7 @@ fnPlotEXP <- function(first, second, biomarker) {
        cex.main=.9)
   points(expression[,1], expression[,2], pch=19, col="#3333CC")
 }
-fnDefineBiomarker <- function(gene.id, isoform.id, estimate, pvalue, stat, type) {
-  biomarker <- list()
-  biomarker[["gene.id"]] <- gene.id
-  biomarker[["isoform.id"]] <- isoform.id
-  
-  biomarker[["pvalue"]] <- pvalue
-  biomarker[["stat"]] <- stat
-  biomarker[["estimate"]] <- estimate
-  biomarker[["type"]] <- type
-  biomarker[["label"]] <- annot.ensembl.all.genes[which(annot.ensembl.all.genes[ , "EnsemblGeneId"] == gene.id), "Symbol"]
-  biomarker[["short.label"]] <- biomarker[["label"]]
-  
-  if(biomarker[["type"]] == "gene"){
-    biomarker[["id"]] <- biomarker[["gene.id"]]
-  }else{
-    biomarker[["label"]] <- sprintf("%s(%s)", biomarker[["isoform.id"]], biomarker[["label"]])
-    biomarker[["short.label"]] <- sprintf("%s.ISO", biomarker[["short.label"]])
-    biomarker[["id"]] <- biomarker[["isoform.id"]]
-  }
-  return(biomarker)
-}
 #tissue <- c("all", "tissue types")
-fnValidation <- function(top.significant.biomarkers, validation.cut.off) {
-  rr <- list()
-  
-  for(drug in drugs)
-  {
-    drug.name <- gsub("drugid_", "", drug)
-    if(!all(is.na(top.significant.biomarkers[[drug.name]])))
-    {
-      top.significant.biomarkers.drug <- top.significant.biomarkers[[drug.name]]
-      top.significant.biomarkers.drug.5 <- NULL
-      specificities <- table(top.significant.biomarkers.drug$specificity)
-      for(spec in names(specificities))
-      {
-        top.significant.biomarkers.drug.5 <- rbind(top.significant.biomarkers.drug.5, subset(top.significant.biomarkers.drug, specificity == spec)[1:min(validation.cut.off, specificities[spec], na.rm=TRUE),])
-      }
-      top.significant.biomarkers.drug <- top.significant.biomarkers.drug.5[order(top.significant.biomarkers.drug.5$rank),]
-      plots.no <- nrow(top.significant.biomarkers.drug)
-      rr[[drug.name]] <- top.significant.biomarkers.drug
-      
-      pdf(file=file.path(path.diagrams, sprintf("%s.pdf", gsub("drugid_", "", drug))), height=4*(plots.no+1), width=16)
-      
-      par(mfrow=c((plots.no + 1), 4))
-      
-      if(training.type == "CCLE_GDSC")
-      {
-        fnPlotAUC(first="ccle", second="gdsc", drug, tissue.type="all", color="#666666")
-        fnPlotAUC(first="ccle", second="gdsc", drug, tissue.type=tissue, color="#996666")
-        fnPlotAUC(first="ccle", second="gray", drug, tissue.type="", color="#CC3399")
-        fnPlotAUC(first="gray", second="gdsc", drug, tissue.type="", color="#663399")
-        
-      }else
-      {
-        fnPlotAUC(first="ccle", second="gray", drug, tissue.type="", color="#CC3399")
-        plot.new()
-        plot.new()
-        plot.new()
-      }
-      
-      for(i in 1:plots.no)
-      {
-        biomarker <- fnDefineBiomarker (gene.id=as.character(top.significant.biomarkers.drug[i, "gene.id"]), 
-                                        isoform.id=as.character(top.significant.biomarkers.drug[i, "transcript.id"]), 
-                                        estimate=as.numeric(top.significant.biomarkers.drug[i, "estimate"]),
-                                        pvalue=as.numeric(top.significant.biomarkers.drug[i, adjustment.method]), 
-                                        stat=as.numeric(top.significant.biomarkers.drug[i, stat]), 
-                                        type=as.character(top.significant.biomarkers.drug[i, "type"]))
-        if(biomarker$type == "isoform") {f <- biomarker$id %in% colnames(gray.isoforms.fpkm) & !all(is.na(gray.isoforms.fpkm[,biomarker$id]))}
-        if(biomarker$type == "gene") {f <- biomarker$id %in% colnames(gray.genes.fpkm) & !all(is.na(gray.genes.fpkm[,biomarker$id]))}
-        if (f)
-        {
-          
-          fnPlotEXP(first=paste0("ccle.", biomarker$type), second=paste0("gray.", biomarker$type), biomarker)    
-          
-          if(training.type == "CCLE_GDSC")
-          {
-            fnPlotCCLEGDSC(biomarker, tissue.type=tissue, drug=drug)
-          }else
-          {
-            fnPlotCCLE(biomarker, tissue.type=tissue, drug=drug)
-          }
-          gray <- fnValidateWithGray(biomarker, method="all", color="#66CC00", drug=drug)
-          rr[[drug.name]][i, "all.gray.n"] <- gray$n
-          rr[[drug.name]][i, "all.gray.pvalue"] <- gray$pvalue
-          rr[[drug.name]][i, "all.gray.estimate"] <- gray$estimate
-          rr[[drug.name]][i, "all.gray.stat"] <- gray$stat
-          
-          gray <- fnValidateWithGray(biomarker, method="common", color="#336600", drug=drug)
-          rr[[drug.name]][i, "common.gray.n"] <- gray$n
-          rr[[drug.name]][i, "common.gray.pvalue"] <- gray$pvalue
-          rr[[drug.name]][i, "common.gray.estimate"] <- gray$estimate
-          rr[[drug.name]][i, "common.gray.stat"] <- gray$stat
-          
-          rr[[drug.name]][i, "biotype"] <- annot.ensembl.all.genes[biomarker$gene.id, "GeneBioType"]
-        }
-      }
-      dev.off()
-    }
-  }
-  return(rr)
-}
-fnGtex <- function(validation.method=c(stat, "pvalue")) {
-  ccle.breast.cells <- rownames(ccle.tissuetype)[which(ccle.tissuetype[ , "tissue.type"] == "breast")]
-  ccle.breast.cells <- intersectList(ccle.breast.cells, rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
-  ccle.breast.genes <- ccle.genes.fpkm[ccle.breast.cells,]
-  #ccle.breast.genes <- 2^ccle.breast.genes - 1
-  
-  ccle.breast.isoforms <- ccle.isoforms.fpkm[ccle.breast.cells,]
-  #ccle.breast.isoforms <- 2^ccle.breast.isoforms - 1
-  
-  gray.breast.genes <- gray.genes.fpkm #2^gray.genes.fpkm -1
-  gray.breast.isoforms <- gray.isoforms.fpkm #2^gray.isoforms.fpkm -1
-  
-  gtex.breast.genes <- t(exprs(GTex.BR$genes))
-  gtex.breast.isoforms <-  t(exprs(GTex.BR$isoforms))
-  
-  breast.no <- max(max(nrow(gtex.breast.genes), nrow(ccle.breast.genes)), nrow(gray.breast.genes))
-  mycol <- RColorBrewer::brewer.pal(n=8, name="Set2")[c(3,4,6)]
-  
-  
-  load(file.path(path.diagrams, "top.biomarkers.gray.RData"), verbose=TRUE)
-  all.biomarkers <- Validation.result
-
-  for(i in 1:length(all.biomarkers))
-  {
-    if(validation.method == stat) {
-    #  all.biomarkers[[i]] <- all.biomarkers[[i]][which(all.biomarkers[[i]][ ,stat] <= all.biomarkers[[i]]$breast),,drop=FALSE]
-     all.biomarkers[[i]] <- all.biomarkers[[i]][which(all.biomarkers[[i]]$breast >= .55),,drop=FALSE]
-  } else {
-      all.biomarkers[[i]] <- all.biomarkers[[i]][which(all.biomarkers[[i]][ ,paste0(tissue, "_pvalue")] <= .05),,drop=FALSE]
-    }
-    
-    no <- nrow(all.biomarkers[[i]])
-    if(no > 0)
-    {
-      nn <- ifelse(no >= 4, no%/%4, 1)
-      pdf(file=file.path(path.diagrams, sprintf("%s_exp_%s.pdf", names(all.biomarkers)[i], validation.method)), width=14, height=3.5 * nn)
-      par(mfrow=c(nn,4))
-      for( j in 1:nrow(all.biomarkers[[i]]))
-      {
-        validation.stat <- "unvalidated"
-        if(!is.na(all.biomarkers[[i]][j, "all.gray.pvalue"]))
-        {
-          if(as.numeric(all.biomarkers[[i]][j, "all.gray.pvalue"]) < .05 & 
-             sign(as.numeric(all.biomarkers[[i]][j, "estimate"])) == sign(as.numeric(all.biomarkers[[i]][j, "all.gray.estimate"]))) {validation.stat <- "validated"}
-          
-          if(all.biomarkers[[i]][j, "type"] == "gene")
-          {
-            ensembl.id <- rownames(annot.ensembl.all.genes)[which(annot.ensembl.all.genes[ , "EnsemblGeneId"] == all.biomarkers[[i]][j, "gene.id"])]
-            all.biomarkers[[i]][j, "ccle"] <- median(ccle.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])])
-            all.biomarkers[[i]][j, "gray"] <- median(gray.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])])
-            if(ensembl.id %in% colnames(gtex.breast.genes)){
-              all.biomarkers[[i]][j, "gtex"] <- median(gtex.breast.genes[, ensembl.id])
-            }else{
-              all.biomarkers[[i]][j, "gtex"] <- NA
-            }
-            tt <- matrix(NA, ncol=3, nrow=breast.no)
-            colnames(tt) <- c("CCLE", "GRAY", "GTEX")
-            tt[1:nrow(ccle.breast.genes),1] <- ccle.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])]
-            tt[1:nrow(gray.breast.genes),2] <- gray.breast.genes[, as.character(all.biomarkers[[i]][j, "gene.id"])]
-            if(ensembl.id %in% colnames(gtex.breast.genes)){
-              tt[1:nrow(gtex.breast.genes),3] <- gtex.breast.genes[, ensembl.id]
-            }
-          }else{ ##isoform
-            all.biomarkers[[i]][j, "ccle"] <- median(ccle.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])])
-            all.biomarkers[[i]][j, "gray"] <- median(gray.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])])
-            if(as.character(all.biomarkers[[i]][j, "transcript.id"]) %in% colnames(gtex.breast.isoforms)){
-              all.biomarkers[[i]][j, "gtex"] <- median(gtex.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])])
-            }else{
-              all.biomarkers[[i]][j, "gtex"] <- NA
-            }
-            tt <- matrix(NA, ncol=3, nrow=breast.no)
-            colnames(tt) <- c("CCLE", "GRAY", "GTEX")
-            tt[1:nrow(ccle.breast.isoforms),1] <- ccle.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])]
-            tt[1:nrow(gray.breast.isoforms),2] <- gray.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])]
-            if(as.character(all.biomarkers[[i]][j, "transcript.id"]) %in% colnames(gtex.breast.isoforms)){
-              tt[1:nrow(gtex.breast.isoforms),3] <- gtex.breast.isoforms[, as.character(all.biomarkers[[i]][j, "transcript.id"])]
-            }
-          }
-          #boxplot(tt, col=mycol, main=sprintf("%s-%s (%s)", all.biomarkers[[i]][j, "symbol"], all.biomarkers[[i]][j, "type"], validation.stat), pch=20)
-          invisible(genefu::boxplotplus2(t(tt),
-                                         .ylim=c(0,9.5),
-                                         pt.col=mycol,
-                                         #names=c(paste0("none (", length(res.nosignifseeds), ")"), paste0("all (", length(res.allsignifseeds), ")")),
-                                         ylab="expression", 
-                                         #xlab="signif seeds (# of targets)",
-                                         main=sprintf("%s-%s (%s)", all.biomarkers[[i]][j, "symbol"], all.biomarkers[[i]][j, "type"], validation.stat),
-                                         #.las=2,
-                                         pt.cex=1))
-          train <- test <- NA
-          if(!all(is.na(tt[,3]))){
-            train <- wilcox.test(tt[,1], tt[,3], alternative="greater")$p.value
-            test <- wilcox.test(tt[,2], tt[,3], alternative="greater")$p.value
-          }
-          legend("topright", legend=c(sprintf("CCLE > GTEX : %s", round(train, digits=25)), sprintf("GRAY > GTEX : %s", round(test, digits=25))), fill=mycol[1:2], bty="n")
-          all.biomarkers[[i]][j, "validation.stat"] <- validation.stat
-          all.biomarkers[[i]][j, "Gtex.train.sit"] <-  train
-          all.biomarkers[[i]][j, "Gtex.test.sit"] <- test
-        }
-      }
-      dev.off()
-    }
-  }
-  
-  tt <- lapply(all.biomarkers, function(x){table(x$validation.stat, ifelse(x$Gtex.train.sit< 0.05, "Lower", "Greater"))})
-  validated.gtex.lower <- sapply(tt, function(x){if(("validated" %in% rownames(x)) & "Lower" %in% colnames(x)) {x["validated", "Lower"]/sum(x[, "Lower"])}else{0}})
-  validated.gtex.greater <- sapply(tt, function(x){if(("validated" %in% rownames(x)) & "Greater" %in% colnames(x)) {x["validated", "Greater"]/sum(x[, "Greater"])} else {0}})
-  validated.all <- sapply(tt, function(x){if("validated" %in% rownames(x)) {sum(x["validated",])/sum(x)} else {0}})  
-  biomarkers.no <- sapply(all.biomarkers, function(x){nrow(x)})
-  isoformstt <- lapply(all.biomarkers, function(x){table(x$validation.stat, x$type)})
-  validated.isoforms <- sapply(isoformstt, function(x){if(("validated" %in% rownames(x)) & ("isoform" %in% colnames(x))){x["validated", "isoform"]/sum(x[, "isoform"])} else {0}})
-  validated.genes <- sapply(isoformstt, function(x){if(("validated" %in% rownames(x)) & ("gene" %in% colnames(x))) {x["validated", "gene"]/sum(x[, "gene"])} else{0}})
-  
-  WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(path.diagrams, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
-  save(all.biomarkers, file=file.path(path.diagrams, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
-  
-  validation.res <- cbind("gtex.lower"=validated.gtex.lower, 
-                          "gtex.greater"=validated.gtex.greater, 
-                          "all"=validated.all, 
-                          "isoform"=validated.isoforms,
-                          "gene"=validated.genes)
-  write.csv(cbind(validation.res,
-                  "biomarkers.no"=biomarkers.no), file.path(path.diagrams, sprintf("validated.regarding.gtex.%s.csv", validation.method)))
-  pdf(file.path(path.diagrams, sprintf("validated.biomarkers.proportion.%s.pdf", validation.method)), height =7 , width =7)
-  mycol <- RColorBrewer::brewer.pal(n=8, name="Set2")[1:5]
-  par(mar=c(7,5,5,6))
-  par(oma=c(2,2,2,2))
-  barplot(t(validation.res), beside=T, las =2, col=mycol, main="Validated breast biomarkers proportion in several categories", ylim=c(0,1))
-  legend("topright", legend=colnames(validation.res), fill=mycol, bty="n")
-  dev.off()
-  return(all.biomarkers)
-}
 fnFetchBiomarkers <- function(top.significant.biomarkers, drug, indices) {
   biomarkers <- list()
   j <- 1;
@@ -437,7 +412,7 @@ fnFetchBiomarkers <- function(top.significant.biomarkers, drug, indices) {
                                     pvalue=as.numeric(top.significant.biomarkers[i, adjustment.method]), 
                                     gray.estimate=as.numeric(top.significant.biomarkers[i, "all.gray.estimate"]),
                                     gray.pvalue=as.numeric(top.significant.biomarkers[i, "all.gray.pvalue"]), 
-                                    stat.value=as.numeric(top.significant.biomarkers[i, stat]), 
+                                    effect.size.value=as.numeric(top.significant.biomarkers[i, effect.size]), 
                                     type=as.character(top.significant.biomarkers[i, "type"]),
                                     biotype=as.character(top.significant.biomarkers[i, "biotype"]),
                                     gtex=ifelse(as.numeric(top.significant.biomarkers[i, "Gtex.train.sit"]) < 0.05, "tumor.specific","no.diff"),
@@ -749,13 +724,13 @@ fnPlotLogPvalue <- function (drug, biomarkers, pvalue.col.name, effect.size.col,
   dev.off()
   
 }
-fnDefineBiomarker2 <- function(gene.id, isoform.id, estimate, pvalue, gray.estimate, gray.pvalue, stat.value, type, biotype, gtex, delta.rank, isoform.no) {
+fnDefineBiomarker2 <- function(gene.id, isoform.id, estimate, pvalue, gray.estimate, gray.pvalue, effect.size.value, type, biotype, gtex, delta.rank, isoform.no) {
   biomarker <- list()
   biomarker[["gene.id"]] <- gene.id
   biomarker[["isoform.id"]] <- isoform.id
   biomarker[["gtex"]] <- gtex
   
-  biomarker[[stat]] <- stat.value
+  biomarker[[effect.size]] <- effect.size.value
   biomarker[["estimate"]] <- estimate
   biomarker[["pvalue"]] <- pvalue
   biomarker[["gray.estimate"]] <- gray.estimate
