@@ -1,8 +1,34 @@
 load("data/PSets/CCLE_hs.RData")
 load("data/PSets/GDSC.RData")
 load("data/PSets/GRAY_hs.RData")
+load("data/PSets/gCSI_hs.RData")
+require(PharmacoGx)
 
 source("code/foo.R")
+path.result <- file.path("result")
+
+
+file.sensitivity <- "auc_recomputed_drug_association_ccle_gdsc.RData"
+training.type <- ifelse(regexpr("gdsc", file.sensitivity) < 1, "CCLE", "CCLE_GDSC")
+phenotype <- sensitivity.type <- paste0(unlist(strsplit(file.sensitivity, "_"))[1:2], collapse="_") 
+breast.specific <- ifelse(regexpr("breast", file.sensitivity) < 1, FALSE, TRUE)
+
+if(sensitivity.type == "slope_recomputed"){
+  if(training.type == "CCLE_GDSC")
+  {
+    ss<- unlist(strsplit(file.sensitivity, "_"))
+    res.weight <- as.numeric(ss[3]); sens.weight <- as.numeric(ss[4]);
+    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
+  }else
+  {
+    ss <- unlist(strsplit(file.sensitivity, "_"))
+    res.weight <- as.numeric(ss[4]); sens.weight <- as.numeric(ss[5]);
+    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))    
+  }
+}else{
+  ss <- unlist(strsplit(file.sensitivity, "_"))
+  path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
+}
 
 ##Supplementary Figure 4
 ##rnaseq/microarray concordance
@@ -25,6 +51,8 @@ pdf(file.path(path.diagrams, "rnaseq_microarray.pdf"), height=7, width=7)
 par(mar=c(9,5,5,2))
 boxplot(cbind("Identical"=diag(ccle.rnaseq.microarray.cor), "Different"=c(ccle.rnaseq.microarray.cor[upper.tri(ccle.rnaseq.microarray.cor)], ccle.rnaseq.microarray.cor[lower.tri(ccle.rnaseq.microarray.cor)])), las = 2, col = "gray", cex.lab=1, cex.axis=1, pch=19, ylab="spearman correlation", outpch=20, outcex=0.5)
 dev.off()
+
+
 
 
 ###supplementary Figure 5
@@ -332,19 +360,29 @@ cat(sprintf("in vitro confidence interval difference pvalue: %s\n", fnConfidence
                                                                                                    x1=uhn.isoforms.models$complete[[best.isoform]]$model$`tt[, "exp"]`,
                                                                                                    x2=uhn.gene.model$complete[[1]]$model$`tt[, "exp"]`)), file=results, append=TRUE)
 
+
+
 #######
 ##Supplementary table 2
 ##validation rate of isformic biomarkers 
-drugs <- intersectList(drugNames(GRAY),
+drugs <- unionList(intersectList(drugNames(GRAY),
                        drugNames(CCLE),
-                       drugNames(GDSC))
+                       drugNames(GDSC)), 
+                   intersectList(drugNames(gCSI),
+                       drugNames(CCLE),
+                       drugNames(GDSC)))
 drugs <- sort(drugs)
-xx <- matrix("-", ncol=4, nrow=length(drugs), dimnames=list(drugs, c("Compound", "Training", "Pre-validation", "Final validation")))
+xx <- matrix("-", ncol=6, nrow=length(drugs), dimnames=list(drugs, c("Compound", "Training", "Pre-validation Pan-Cancer","Training Breast Specific", "Pre-validation Breast", "Final validation")))
 xx[drugs, "Compound"] <- drugs
-xx[drugs, "Training"] <- sapply(all.biomarkers, function(x){length(which(x["type"]=="isoform" & x["breast"] > 0.55))})[drugs]
+load(file.path(path.diagrams, "all.biomarkers.RData"), verbose=TRUE)
+xx[drugs, "Training"] <- sapply(all.biomarkers, function(x){length(which(x["type"]=="isoform"))})[drugs]
+load(file.path(path.diagrams, "validated.biomarkers.gCSI.RData"), verbose=TRUE)
+xx[intersect(drugs, drugNames(gCSI)), "Pre-validation Pan-Cancer"] <- sapply(validated.biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[intersect(drugs, drugNames(gCSI))]
+load(file.path(path.diagrams, "all.biomarkers.RData"), verbose=TRUE)
+xx[drugs, "Training Breast Specific"] <- sapply(all.biomarkers, function(x){length(which(x["type"]=="isoform" & x["breast"] > 0.55))})[drugs]
 load(file.path(path.diagrams, "Biomarkers_validated_breast_cindex_gray_pvalue.RData"), verbose=TRUE)
-xx[drugs, "Pre-validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[drugs]
+xx[intersect(drugs, drugNames(GRAY)), "Pre-validation Breast"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[intersect(drugs, drugNames(GRAY))]
 load(file.path(path.diagrams, "Biomarkers_uhn_status.RData"), verbose=TRUE)
 xx[names(biomarkers), "Final validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})
-xtable::print.xtable(xtable::xtable(xx, digits=0), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "validation_rate.tex"), append=FALSE)
+xtable::print.xtable(xtable::xtable(xx, digits=0, align=c("l","l|","l","l||","l","l","l")), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "validation_rate.tex"), append=FALSE)
 #######

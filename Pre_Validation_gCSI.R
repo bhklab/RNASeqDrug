@@ -225,7 +225,7 @@ for(drug in drugs) {
   }
 }
 biomarkers <- bb
-save(biomarkers, file=file.path(path.diagrams, sprintf("Biomarkers_with_validation_status_2_%s.RData", validation.method)))
+save(biomarkers, file=file.path(path.diagrams, sprintf("Biomarkers_with_validation_status_2_%s_gCSI.RData", validation.method)))
 ####################################################
 
 validated.biomarkers <- lapply(biomarkers, function(x) return(subset(x, bootstrap.validation.stat=="validated")))
@@ -238,22 +238,6 @@ save(validated.biomarkers, validated.genes, validated.isoforms, file=file.path(p
 WriteXLS::WriteXLS("validated.isoforms", ExcelFileName=file.path(path.diagrams, "validated.isoforms.gCSI.xlsx"), row.names=TRUE)
 WriteXLS::WriteXLS("validated.biomarkers", ExcelFileName=file.path(path.diagrams, "validated.biomarkers.gCSI.xlsx"), row.names=TRUE)
 
-# #############
-
-# biomarkers.fdr <- lapply(biomarkers, function(x) return(cbind(x, "all.gCSI.fdr"=p.adjust(x[,"all.gCSI.pvalue"], method="fdr"))))
-
-
-# validated.biomarkers.fdr <- lapply(biomarkers.fdr, function(x) return(subset(x, validation.stat=="validated")))
-
-# validated.isoforms.fdr <- lapply(validated.biomarkers.fdr, function(x) return(subset(x, type=="isoform")))
-# validated.genes.fdr <- lapply(validated.biomarkers.fdr, function(x) return(subset(x, type=="gene")))
-
-# save(validated.biomarkers.fdr, validated.genes.fdr, validated.isoforms.fdr, file=file.path(path.diagrams, "validated.biomarkers.fdr.gCSI.RData"))
-
-# WriteXLS::WriteXLS("validated.isoforms.fdr", ExcelFileName=file.path(path.diagrams, "validated.isoforms.fdr.gCSI.xlsx"), row.names=TRUE)
-# WriteXLS::WriteXLS("validated.biomarkers.fdr", ExcelFileName=file.path(path.diagrams, "validated.biomarkers.fdr.gCSI.xlsx"), row.names=TRUE)
-
-# validated.isoforms.fdr <- 
 
 #############
 
@@ -720,10 +704,217 @@ dev.off()
 
 
 
+#############
+
+biomarkers.fdr <- lapply(biomarkers, function(x) return(cbind(x, "gCSI.bootstrap.fdr"=p.adjust(x[,"gCSI.bootstrap.pvalue"], method="fdr"))))
+biomarkers.fdr <- lapply(biomarkers.fdr, function(x) {x[,"bootstrap.validation.stat"] <- ifelse(x[, "gCSI.bootstrap.fdr"]<0.01, "validated", "unvalidated"); return(x)})
+
+save(biomarkers.fdr, file=file.path(path.diagrams,"gCSI.biomarkers.fdr.RData"))
+
+validated.biomarkers.fdr <- lapply(biomarkers.fdr, function(x) return(subset(x, bootstrap.validation.stat=="validated")))
+
+validated.isoforms.fdr <- lapply(validated.biomarkers.fdr, function(x) return(subset(x, type=="isoform")))
+validated.genes.fdr <- lapply(validated.biomarkers.fdr, function(x) return(subset(x, type=="gene")))
+
+save(validated.biomarkers.fdr, validated.genes.fdr, validated.isoforms.fdr, file=file.path(path.diagrams, "validated.biomarkers.fdr.gCSI.RData"))
+
+WriteXLS::WriteXLS("validated.isoforms.fdr", ExcelFileName=file.path(path.diagrams, "validated.isoforms.fdr.gCSI.xlsx"), row.names=TRUE)
+WriteXLS::WriteXLS("validated.biomarkers.fdr", ExcelFileName=file.path(path.diagrams, "validated.biomarkers.fdr.gCSI.xlsx"), row.names=TRUE)
+
+
+
+#############
+
+fnValidatedPerCat <- function(biomarkers){
+
+  gene.n <- nrow(subset(biomarkers, specificity=="gene.specific"))
+  valid.gene.percent <- sum(subset(biomarkers, specificity=="gene.specific")$bootstrap.validation.stat=="validated")#/gene.n
+
+  valid.isoform.n <- nrow(subset(biomarkers, specificity=="isoform.specific"))
+  valid.isoform.percent <- sum(subset(biomarkers, specificity=="isoform.specific")$bootstrap.validation.stat=="validated")#/valid.isoform.n
+
+  valid.common.n <- nrow(subset(biomarkers, specificity=="common"))
+  valid.common.percent <- sum(subset(biomarkers, specificity=="common")$bootstrap.validation.stat=="validated")#/valid.common.n
+
+  return(c( "Gene Specific Not Validated"=gene.n, "Gene Specific Validated" = valid.gene.percent, 
+            "Isoform Specific Not Validated"=valid.isoform.n , "Isoform Specific Validated" = valid.isoform.percent,
+            "Common Not Validated"=valid.common.n , "Common Validated" = valid.common.percent))
+}
+
+
+fnValidatedPerType <- function(biomarkers){
+
+  valid.gene.n <- nrow(subset(biomarkers, type=="gene"))
+  valid.gene.percent <- sum(subset(biomarkers, type=="gene")$bootstrap.validation.stat=="validated")/valid.gene.n
+
+  valid.isoform.n <- nrow(subset(biomarkers, type=="isoform"))
+  valid.isoform.percent <- sum(subset(biomarkers, type=="isoform")$bootstrap.validation.stat=="validated")/valid.isoform.n
+
+  return(c(gene.percent = valid.gene.percent, gene.n=valid.gene.n, 
+           isoform.percent = valid.isoform.percent, isoform.n=valid.isoform.n))
+}
+
+valid.per.cat <- data.frame(lapply(biomarkers.fdr, fnValidatedPerCat), check.names=FALSE)
+
+
+###########
+
+pdf("barplot_gCSI_valid_fdr.pdf", height=10, width=12.5)
+{
+
+valid.per.cat <- valid.per.cat[,c("Crizotinib", "lapatinib", "Erlotinib", "paclitaxel", "PD-0325901")]
+grobs <- list()
+toPlot <- melt(as.matrix(valid.per.cat), varnames=c("Status", "Drug"), value.name="Number of Biomarkers")
+
+toPlot$Category <- gsub(toPlot$Status, pattern="( Not)?.Validated", rep="")
+
+toPlot$Category <- factor(toPlot$Category, levels=c("Isoform Specific", "Common", "Gene Specific"))
+
+toPlot$Status <- gsub(toPlot$Status, pattern=".+Not Validated", rep="Not Validated")
+
+toPlot$Status <- factor(toPlot$Status, levels=c("Isoform Specific Validated", "Common Validated", "Gene Specific Validated",  "Not Validated"))
+toPlot1 <- subset(toPlot, Drug!="PD-0325901")
+# toPlot <- cbind(toPlot, "Status"=c("Validated", "Not Validated"))
+#subset(toPlot, Drug==drug)
+myPal <- RColorBrewer::brewer.pal(n=9, name="Set1")
+
+mycols <- c(myPal[1], myPal[4], myPal[2], "#b3b3b3")
+
+g <- ggplot(toPlot1, aes(x=NA, y=`Number of Biomarkers`, group=Category, fill=Status)) + 
+            geom_col(width=0.8, position = position_dodge(width=0.9)) +
+            # expand_limits(y=(max(toPlot[,"Validation Rate"]) + 0.05)) +
+            #coord_cartesian(ylim=c(-0.001,1)) + 
+            theme_minimal()  + 
+            #scale_y_reverse(expand=c(0,0), labels=function(x){return(gsub(sprintf("%1.2f",as.numeric(x)), pattern="0.00", replace="", fixed=TRUE))}) + 
+            theme(legend.position = c(0.3,0.8), legend.text=element_text(size=16)) +
+            theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+            facet_wrap(~Drug, nrow=1, strip.position ="bottom") +
+            # theme(axis.title.x=element_blank(),axis.text.y = element_blank(), legend.background = element_rect(fill="white", size=0), plot.title = element_text(size=16,face="bold", hjust = 0.5), axis.title.y = element_text(size=12,face="bold")) + 
+            theme(axis.text.x = element_blank(), axis.text.y = element_text(size=20, face="bold"), legend.background = element_rect(fill="white", size=0), plot.title = element_text(size=24,face="bold", hjust = 0.5), axis.title = element_text(size=30)) + 
+            xlab("") +  #coord_flip() +
+            theme(plot.margin=unit(c(0.005,0,0.005,0.005),"npc"), strip.text.x = element_text(size=30)) + 
+            scale_fill_manual(values=mycols) #+ 
+            #guides(fill=guide_legend(reverse=TRUE))
+
+
+grobs[["barplot1"]] <-  g
+
+toPlot2 <- subset(toPlot, Drug=="PD-0325901")
+
+g <- ggplot(toPlot2, aes(x=NA, y=`Number of Biomarkers`, group=Category, fill=Status)) + 
+            geom_col(width=0.8, position = position_dodge(width=0.9)) +
+            # expand_limits(y=(max(toPlot[,"Validation Rate"]) + 0.05)) +
+            #coord_cartesian(ylim=c(-0.001,1)) + 
+            theme_minimal()  + 
+            #scale_y_reverse(expand=c(0,0), labels=function(x){return(gsub(sprintf("%1.2f",as.numeric(x)), pattern="0.00", replace="", fixed=TRUE))}) + 
+            theme(legend.position = "none") + scale_y_continuous(position="right") +
+            theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+            facet_wrap(~Drug, nrow=1, strip.position ="bottom") +
+            # theme(axis.title.x=element_blank(),axis.text.y = element_blank(), legend.background = element_rect(fill="white", size=0), plot.title = element_text(size=20,face="bold", hjust = 0.5), axis.title.y = element_text(size=12,face="bold")) + 
+            theme(axis.text.x = element_blank(), axis.text.y = element_text(size=20, face="bold"), legend.background = element_rect(fill="white", size=0), plot.title = element_text(size=16,face="bold", hjust = 0.5), axis.title = element_text(size=30)) + 
+            xlab("") +  ylab("") +  #coord_flip() +
+            theme(plot.margin=unit(c(0.005,0,0.005,0.005),"npc"), strip.text.x = element_text(size=30)) + 
+            #ggtitle("Pre-Validation Rate of Biomarkers in gCSI") + 
+            scale_fill_manual(values=mycols)
+
+grobs[["barplot2"]] <-  g
+
+title1=textGrob("Pre-Validation Rate of Biomarkers in gCSI", gp=gpar(fontface="bold", cex=3))
+title2=textGrob("Drug", gp=gpar(cex=2.5))
+
+
+grid.arrange(grobs = grobs, layout_matrix=lay, bottom=title2)
+
+
+}
+dev.off()
+
+
+
+common.cells.gCSI.ccle <- intersect(common.cells.gCSI, common.cells.ccle)
+common.cells.gCSI.gdsc <- intersectList(common.cells.gCSI, common.cells.ccle, cellNames(GDSC))
 
 
 
 
+
+expression.cors.valid <- lapply(biomarkers.fdr, function(x){
+  tt <- subset(x, type=="gene" & bootstrap.validation.stat=="validated")
+  xx <- ccle.genes.fpkm[common.cells.gCSI.ccle,tt$gene.id]
+  yy <- gCSI.genes.fpkm[common.cells.gCSI.ccle,tt$gene.id]
+  tt <- subset(x, type=="isoform" & bootstrap.validation.stat=="validated")
+  xx <- cbind(xx,ccle.isoforms.fpkm[common.cells.gCSI.ccle,tt$transcript.id])
+  yy <- cbind(yy,gCSI.isoforms.fpkm[common.cells.gCSI.ccle,tt$transcript.id])
+  if(NROW(tt)==0){
+    return(NA)
+  }
+  return(diag(cor(xx, yy, method="pearson", use="pairwise.complete.obs")))
+})
+
+
+expression.cors.unvalid <- lapply(biomarkers.fdr, function(x){
+  tt <- subset(x, type=="gene" & bootstrap.validation.stat=="unvalidated")
+  xx <- ccle.genes.fpkm[common.cells.gCSI.ccle,tt$gene.id]
+  yy <- gCSI.genes.fpkm[common.cells.gCSI.ccle,tt$gene.id]
+  tt <- subset(x, type=="isoform" & bootstrap.validation.stat=="unvalidated")
+  xx <- cbind(xx,ccle.isoforms.fpkm[common.cells.gCSI.ccle,tt$transcript.id])
+  yy <- cbind(yy,gCSI.isoforms.fpkm[common.cells.gCSI.ccle,tt$transcript.id])
+  if(NROW(tt)==0){
+    return(NA)
+  }
+  return(diag(cor(xx, yy, method="pearson", use="pairwise.complete.obs")))
+})
+
+expression.cors.all <- lapply(biomarkers.fdr, function(x){
+  tt <- subset(x, type=="gene")
+  xx <- ccle.genes.fpkm[common.cells.gCSI.ccle,tt$gene.id]
+  yy <- gCSI.genes.fpkm[common.cells.gCSI.ccle,tt$gene.id]
+  tt <- subset(x, type=="isoform")
+  xx <- cbind(xx,ccle.isoforms.fpkm[common.cells.gCSI.ccle,tt$transcript.id])
+  yy <- cbind(yy,gCSI.isoforms.fpkm[common.cells.gCSI.ccle,tt$transcript.id])
+  if(NROW(tt)==0){
+    return(NA)
+  }
+  return(diag(cor(xx, yy, method="pearson", use="pairwise.complete.obs")))
+})
+
+toPlot1 <- cbind(melt(expression.cors.valid), status="Validated")
+toPlot2 <- cbind(melt(expression.cors.unvalid), status="Unvalidated")
+toPlot <- rbind(toPlot1,toPlot2)
+colnames(toPlot) <- c("Cor", "Drug", "Status")
+
+# myPal <- RColorBrewer::brewer.pal(n=8, name="Set2")
+pdf("distribution_expression_biomarker_fdr.pdf", height=7, width=14)
+ggplot(toPlot, aes(x=Cor)) + geom_density(fill="grey") + facet_wrap(~Drug, nrow=1) + theme_minimal() +
+       theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+       #scale_fill_manual(values=myPal[c(1,2)]) + 
+       theme(axis.text.x=element_text(size=16, angle=45), axis.text.y=element_text(size=16)) +
+       xlab("") + ylab("")
+dev.off()
+
+
+
+fnValidatedPerCat <- function(biomarkers){
+
+  gene.n <- nrow(subset(biomarkers, specificity=="gene.specific"))
+  valid.gene.percent <- sum(subset(biomarkers, specificity=="gene.specific")$bootstrap.validation.stat=="validated")#/gene.n
+
+  valid.isoform.n <- nrow(subset(biomarkers, specificity=="isoform.specific"))
+  valid.isoform.percent <- sum(subset(biomarkers, specificity=="isoform.specific")$bootstrap.validation.stat=="validated")#/valid.isoform.n
+
+  valid.common.n <- nrow(subset(biomarkers, specificity=="common"))
+  valid.common.percent <- sum(subset(biomarkers, specificity=="common")$bootstrap.validation.stat=="validated")#/valid.common.n
+
+  return(c( "Gene Specific Total Num"=gene.n, "Gene Specific percent" = valid.gene.percent/gene.n, 
+            "Isoform Specific Total Num"=valid.isoform.n , "Isoform Specific percent" = valid.isoform.percent/valid.isoform.n ,
+            "Common Total Num"=valid.common.n , "Common Validated percent" = valid.common.percent/valid.common.n))
+}
+valid.per.cat <- data.frame(lapply(biomarkers, fnValidatedPerCat), check.names=FALSE)
+
+
+
+
+##### Checking for improved normality
 myx <- apply(ccle.genes.fpkm, 2, function(x) return(!all(is.na(x))&&!all(x==0, na.rm=TRUE)))
 ccle.genes.fpkm <- ccle.genes.fpkm[,myx]
 myx <- apply(ccle.isoforms.fpkm, 2, function(x) return(!all(is.na(x))&&!all(x==0, na.rm=TRUE)))
@@ -731,13 +922,10 @@ ccle.isoforms.fpkm <- ccle.isoforms.fpkm[,myx]
 
 test <- apply(ccle.genes.fpkm, 2,function(x) shapiro.test(x)$statistic)
 test2 <- apply(ccle.genes.fpkm, 2,function(x) shapiro.test(2^x-1)$statistic)
-test3 <- apply(ccle.genes.fpkm, 2,function(x) shapiro.test(log2(2^x-1 + .Machine$double.eps))$statistic)
 
 summary(test)
 summary(test2)
 
 wilcox.test(test, test2, paired=TRUE, alternative="greater")
 
-wilcox.test(test3, test, paired=TRUE, alternative="greater")
 
-boxplot(list(test,test2))
