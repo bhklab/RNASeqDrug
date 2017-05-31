@@ -56,9 +56,9 @@ fnValidation <- function(top.significant.biomarkers, validation.cut.off, validat
             }
           }
           if(common.cells) {
-            gray <- fnValidateWithGray(biomarker, cells="common", color="#336600", drug=drug, plot.create, validation.method=effect.size, validation.cut.off=effect.size.cut.off)
+            gray <- fnValidateWithGray(biomarker, cells="common", color="#336600", drug=drug, plot.create, validation.method="pvalue", validation.cut.off=pvalue.cut.off)
           }else {
-            gray <- fnValidateWithGray(biomarker, cells="all", color="#66CC00", drug=drug, plot.create, validation.method=effect.size, validation.cut.off=effect.size.cut.off)
+            gray <- fnValidateWithGray(biomarker, cells="all", color="#66CC00", drug=drug, plot.create, validation.method="pvalue", validation.cut.off=pvalue.cut.off)
           }
           rr[[drug]][i, "gray.n"] <- gray$n
           rr[[drug]][i, "gray.pvalue"] <- gray$pvalue
@@ -75,7 +75,7 @@ fnValidation <- function(top.significant.biomarkers, validation.cut.off, validat
   }
   return(rr)
 }
-fnValidateWithGray <- function(biomarker, cells=c("common","all"), my.xlim, my.ylim, color, drug, plot.create=FALSE, validation.method=c(effect.size, "pvalue"), validation.cut.off) {
+fnValidateWithGray <- function(biomarker, cells=c("common","all"), my.xlim, my.ylim, color, drug, plot.create=FALSE, validation.method=c(effect.size, "pvalue"), validation.cut.off, expression.cut.off=0.1) {
   gray.sensitivity <- subset(gray.drug.sensitivity, !is.na(gray.drug.sensitivity[, drug]) , select=drug)
   intersected.celllines.gray <- intersect(rownames(gray.sensitivity), rownames(gray.genes.fpkm))
   if(cells=="common") {
@@ -93,7 +93,7 @@ fnValidateWithGray <- function(biomarker, cells=c("common","all"), my.xlim, my.y
   gray.model <- lm(sensitivity[, phenotype]  ~ sensitivity[ , "exprs"])
   gray.pvalue <- 2 
   gray.estimate <- gray.effect.size <- 0
-  if(all(!is.na(gray.model)) & !is.na(gray.model$coefficients[2]))
+  if(all(!is.na(gray.model)) && !is.na(gray.model$coefficients[2]) && length(which(sensitivity[ , "exprs"]!=0)) > (expression.cut.off*nrow(sensitivity)))
   {
     gray.pvalue <- summary(gray.model)$coefficients[2, 4]
     gray.estimate <- summary(gray.model)$coefficients[2, 1]
@@ -582,7 +582,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC.union.cells <- function(drug, tissue.type, bioma
   
   dev.off()
 }
-fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, p.values=NULL, suffix)  {
+fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.specificity=NULL, suffix)  {
   sensitivity <- subset(gray.drug.sensitivity, !is.na(gray.drug.sensitivity[,drug]), select=drug)
   sensitivity <- cbind(sensitivity , "col"="#000000")
   sensitivity <- sensitivity[order(as.numeric(sensitivity[,drug])),]
@@ -622,7 +622,9 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, p.values=N
   quantile.range <- quantile(exp.db, probs = seq(0, 1, 0.01), na.rm=T)
   palette.breaks <- seq(quantile.range["0%"], quantile.range["100%"], 0.05)
   color.palette  <- colorRampPalette(c(blue, "white", red))(length(palette.breaks) - 1)
-  
+  if(drug=="lapatinib"){color.palette  <- colorRampPalette(c(blue, "white", red, red))(length(palette.breaks) - 1)}
+  #if(drug=="Erlotinib"){color.palette  <- colorRampPalette(c(blue, "white", red, red))(length(palette.breaks) - 1)}
+  if(drug=="paclitaxel"){color.palette  <- colorRampPalette(c(blue, blue, "white", red, red))(length(palette.breaks) - 1)}
   exp.db <- exp.db[-nrow(exp.db), , drop=FALSE]
   sensitivity <- sensitivity[-nrow(sensitivity), , drop=FALSE]
   
@@ -634,17 +636,26 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, p.values=N
   #par(mfrow=c(2,1))
   #library("gplots")
   #gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, col=exp.col[,"col"], scale="row", trace="none", dendrogram="none", )
-  coding.biotypes <- c("PRT", "AS", "prcTR")
-  names(coding.biotypes) <- c("protein_coding", "antisense", "processed_transcript")
+  coding.biotypes <- c("PRT", "AS", "prcTR", "pseudogene")
+  names(coding.biotypes) <- c("protein_coding", "antisense", "processed_transcript", "processed_pseudogene")
+  #xx <- sapply(biomarkers, function(x){
+  #  ifelse(x[["gtex"]] == "tumor.specific",
+  #         sprintf("%s (%s) *", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]])), 
+  #         sprintf("%s (%s)", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]])))})
   xx <- sapply(biomarkers, function(x){
-    ifelse(x[["gtex"]] == "tumor.specific",
-           sprintf("%s (%s) *", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]])), 
-           sprintf("%s (%s)", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]])))})
-  if(!is.null(p.values)) {
-    label.col <- sapply(p.values, function(x){ifelse(as.numeric(x) < 0.05, "green4", "black")})
-  } else {
-    label.col <- rep("black", length(xx))
-  }
+    sprintf("%s (%s)", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]]))})
+
+  label.col <- rep("black", length(xx))
+  if(!is.null(gray.specificity)) {
+    for( i in 1:length(gray.specificity)){
+      if(gray.specificity[i]=="isoform.specific") {
+        label.col[i]<- "green4"
+        }else if(gray.specificity[i]=="gene.specific") {
+          label.col[i]<- "red"
+          }
+      }
+    }
+
   if(ncol(exp.db) == 1){
     pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=2, width=22)  
     par(mar=c(1, 1, 1, 17))
@@ -655,15 +666,17 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, p.values=N
     #axis(4,at=(0:(ncol(exp.db) - 1))/(ncol(exp.db) - 1), labels=sapply(biomarkers, function(x){ifelse(x[["gtex"]] == "tumor.specific", "*", NA)}, simplify=T), las=2, cex.axis=.8, tick=FALSE)
     
   }else {
-    pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=9 , width=17)
+    
+    pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=ifelse(drug=="lapatinib", 3, 9) , width=17)
     #par(mar=c(2, 2, 2, 8))
-    par(oma=c(0,0,0,10))
+   
+    if(drug=="paclitaxel"){par(oma=c(0,0,0,13))} else{ par(oma=c(0,0,0,10))}
     # hv <- gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, dendrogram="none", col=exp.col[,"col"], scale="row", trace="none", key=FALSE,
     #                         labRow=xx, colRow=label.col, cexRow = 0.2 + 1.3/log10(ncol(exp.db)),
     #                         #labRow=biomarkers.toPlot,
     #                         labCol=NA)
     hv <- gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, dendrogram="none", col=color.palette, breaks=palette.breaks, trace="none", key=FALSE,
-                            labRow=xx, colRow=label.col, cexRow = 0.2 + 1.3/log10(ncol(exp.db)),
+                            labRow=xx, colRow=label.col, cexRow=ifelse(drug=="lapatinib", 2, 0.2 + 1.3/log10(ncol(exp.db))),
                             #labRow=biomarkers.toPlot,
                             labCol=NA)
     
@@ -692,16 +705,19 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, p.values=N
   }
 }
 fnPlotEffectSize <- function (drug, biomarkers, effect.size, biomarkers.order)  {
-  biomakers.label <- sapply(biomarkers, function(x){x["short.label"]})
-  biomarkers.estimate <-  sapply(biomarkers, function(x){x[effect.size]})
-  names(biomarkers.estimate) <- biomakers.label
+  biomarkers.effect.size <-  sapply(biomarkers, function(x){x[effect.size]})
+  biomarkers.effect.size <- do.call("c", biomarkers.effect.size)
+  biomarkers.effect.size <- biomarkers.effect.size - .5
+  biomarkers.estimate <-  sapply(biomarkers, function(x){x["estimate"]})
   biomarkers.estimate <- do.call("c", biomarkers.estimate)
-  if(!is.null(biomarkers.order)) {biomarkers.estimate <- biomarkers.estimate[biomarkers.order]}
-  names(biomarkers.estimate) <- NULL
+  
+  if(!is.null(biomarkers.order)) {biomarkers.effect.size <- as.numeric(biomarkers.effect.size[biomarkers.order]) * sign(biomarkers.estimate[biomarkers.order])}
+  names(biomarkers.effect.size) <- NULL
   mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
   
-  pdf(file.path(path.diagrams,sprintf("%s_%s.pdf", drug, effect.size)), height=8, width=2)
-  barplot(biomarkers.estimate , horiz=T, col=sapply(biomarkers.estimate , function(x){ifelse(x>=0,mycol3[4], mycol3[3])}))
+  pdf(file.path(path.diagrams,sprintf("%s_%s_GRAY.pdf", drug, effect.size)), height=8, width=2)
+  barplot(biomarkers.effect.size , horiz=T, col=sapply(biomarkers.effect.size , function(x){ifelse(x>=0,mycol3[4], mycol3[3])}),axes=FALSE)
+  axis(1, at=seq(-.2, .2, .1), cex=.7)
   dev.off()
   
 }

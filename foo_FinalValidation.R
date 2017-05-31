@@ -1,6 +1,6 @@
 fnBuildLinearModel <- function(cells, sensitivity, features, fpkm.matrix) {
   complete.models <- list()
-  models <- data.frame(matrix(NA, ncol=5, nrow=length(features), dimnames=list(features, c("pvalue", "estimate", stat, "se", "n"))), stringsAsFactors=FALSE)
+  models <- data.frame(matrix(NA, ncol=5, nrow=length(features), dimnames=list(features, c("pvalue", "estimate", effect.size, "se", "n"))), stringsAsFactors=FALSE)
   for(feature in features) {
     if(!all(is.na(fpkm.matrix[cells, feature]))) {
       tt <- cbind("auc"=sensitivity[cells], "exp"=fpkm.matrix[cells, feature])
@@ -13,7 +13,12 @@ fnBuildLinearModel <- function(cells, sensitivity, features, fpkm.matrix) {
       {
         models[feature,"pvalue"] <- summary(model)$coefficients[2,4]
         models[feature,"estimate"] <- summary(model)$coefficients[2,1]
-        models[feature,stat] <- summary(model)$adj.r.squared
+        if(effect.size == "cindex"){
+          models[feature, effect.size] <- Hmisc::rcorr.cens(x=predict(model), S=tt <- tt[complete.cases(tt),"auc"], outx=TRUE)[[1]]
+        }else{
+          models[feature, effect.size] <- summary(model)$r.squared
+        }
+        
         models[feature,"se"] <- summary(model)$coefficients[2,2]
       }
       complete.models[[feature]] <- model
@@ -24,7 +29,7 @@ fnBuildLinearModel <- function(cells, sensitivity, features, fpkm.matrix) {
 fnNormalizeTraining <- function(ccle.model, gdsc.model) {
   xx <- data.frame(cbind("estimate"=ccle.model$estimate * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$estimate * gdsc.model$n/(ccle.model$n + gdsc.model$n),
                          "pvalue"=ccle.model$pvalue * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$pvalue * gdsc.model$n/(ccle.model$n + gdsc.model$n),
-                         stat=ccle.model[ ,stat] * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model[,stat] * gdsc.model$n/(ccle.model$n + gdsc.model$n),
+                         effect.size=ccle.model[ ,effect.size] * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model[,effect.size] * gdsc.model$n/(ccle.model$n + gdsc.model$n),
                          "se"=ccle.model$se * ccle.model$n/(ccle.model$n + gdsc.model$n) + gdsc.model$se * gdsc.model$n/(ccle.model$n + gdsc.model$n)), stringsAsFactors=FALSE)
   rownames(xx) <- rownames(ccle.model)
   return(xx)
@@ -56,13 +61,15 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
   quantile.range <- quantile(exp.db, probs = seq(0, 1, 0.01), na.rm=T)
   palette.breaks <- seq(quantile.range["0%"], quantile.range["100%"], 0.1)
   color.palette  <- colorRampPalette(c(blue, "white", red))(length(palette.breaks) - 1)
-
-  pdf(file = file.path(path.diagrams, sprintf("%s_isofoms.pdf", file.name)), height=9, width=17) 
+  if(drug=="AZD6244") {
+  #  color.palette  <- colorRampPalette(c(blue, "white", red, red))(length(palette.breaks) - 1)
+  }
   exp.db.iso <- exp.db[,-ncol(exp.db), drop=FALSE]
-  colnames(exp.db.iso)[which(colnames(exp.db.iso) == best.isoform)] <- sprintf("%s***", best.isoform)
+  colnames(exp.db.iso) <- ""
   xx <- which(apply(exp.db.iso, MARGIN=2, function(x){which(all(is.na(x)))}) == 1)
   if(length(xx) > 0) {exp.db.iso <- exp.db.iso[, -xx, drop=FALSE]}
   if(ncol(exp.db.iso) == 1) {
+    pdf(file = file.path(path.diagrams, sprintf("%s_isoform.pdf", file.name)), height=5, width=12) 
     par(mar=c(9, 2, 5, 15))
     par(oma=c(2,2,2,2))
 #    image(exp.db.iso, col = exp.col[,"col"], axes = FALSE)
@@ -70,6 +77,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
     grid(nx = nrow(exp.db.iso), ny = ncol(exp.db.iso), lty = 1)
     axis(4,at = 0, labels=colnames(exp.db.iso), las=2, cex.axis = 2, tick = FALSE)
   }else {
+    pdf(file = file.path(path.diagrams, sprintf("%s_isofoms.pdf", file.name)), height=9, width=17) 
     par(oma=c(0,0,0,13))
     if(cluster){
         # hv <- gplots::heatmap.2(t(exp.db.iso), Colv=NA, Rowv=T, dendrogram="none", col=exp.col[,"col"], scale="row", trace="none", key=FALSE,
@@ -95,6 +103,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
   
   pdf(file = file.path(path.diagrams, sprintf("%s_gene.pdf", file.name)), height=5, width=12) 
   exp.db.gene <- exp.db[,ncol(exp.db), drop=FALSE]
+  colnames(exp.db.gene) <- ""
   par(mar=c(7,1,7,18))
   par(oma=c(2,2,2,2))
 #  image(exp.db.gene, col = exp.col[,"col"], axes = FALSE)
@@ -222,7 +231,7 @@ fnPlotSensitivity <- function(sensitivity, file.name, type="validation") {
   my.xlim = c(1,length(sensitivity))
   my.ylim = range(sensitivity)
   
-  pdf(file = file.path(path.diagrams, sprintf("%s_sensitivity.pdf", file.name)), height=5, width=ifelse(length(sensitivity) > 20, 13, 13))  
+  pdf(file = file.path(path.diagrams, sprintf("%s_sensitivity.pdf", file.name)), height=5, width=ifelse(length(sensitivity) > 20, 12, 12))  
   par(mar=c(12,8,1,1))
 #  par(oma=c(2,2,2,2))
   plot(NA, xlim = my.xlim, ylim = my.ylim,ylab='',xlab='', axes = FALSE)
@@ -279,13 +288,13 @@ fnConfidenceIntervalDifference <- function(model1, model2, x1, x2){
   t.stat <- (model1$estimate - model2$estimate) / sqrt(model1$se^2 + model2$se^2 - 2 * r * model1$se * model2$se)
   diff.ci.p <- pt(q=as.numeric(t.stat), df=n - 1, lower.tail=FALSE)
 }
-fnCor <- function(drug, gene, xx) {
+fnCor <- function(drug, gene, xx, isoforms, best.isoform) {
   tt <- xx
   xx[lower.tri(xx)] <- NA
   diag(xx) <- NA
   quantile.range <- quantile(xx[xx > 0], probs = seq(0, 1, 0.01), na.rm=T)
   palette.breaks <- seq(quantile.range["0%"], quantile.range["100%"], 0.1)
-  if(length(palette.breaks) == 1){
+  if(length(palette.breaks) == 1 && palette.breaks != 1){
     palette.breaks <- c(palette.breaks, 1)
   }
   color.palette  <- colorRampPalette(c("white", red))(length(palette.breaks))
@@ -301,53 +310,30 @@ fnCor <- function(drug, gene, xx) {
   neg.palette.breaks <- c(-1, neg.palette.breaks)
   
   cc <- colorRampPalette(c(blue, "white", red))(length(unique(as.vector(xx[!is.na(xx)]))))
-  pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_gene_corr.pdf", drug, gene)), height=6, width=6)
-  par(oma=c(0,0,6,6))
-  hv <- gplots::heatmap.2(xx, Colv=NA, Rowv=NA, dendrogram="none", col=c(neg.color.palette, color.palette), breaks = c(neg.palette.breaks, palette.breaks), trace="none", key=FALSE,
-                          labRow=colnames(xx)[1:ncol(xx)-1], cexRow = 0.1 + 1/log10(ncol(xx)-1),
-                          #labRow=biomarkers.toPlot,
-                          labCol=NA)
-  if(gene == "TNKS1BP1")
-  {
-    mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.29, 0.29 + (ncol(xx) - 2) * 0.1, 0.1))
-  }
-  if(gene == "TGFA")
-  {
-    mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.28, 0.28 + (ncol(xx) - 2) * 0.08, 0.08))
-  }
-  if(gene == "DUOX1")
-  {
-    mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.24, 0.24 + (ncol(xx) - 2) * 0.057, 0.057))
-  }
-  if(gene == "HNRPDL")
-  {
-    mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.29, 0.29 + (ncol(xx) - 2) * 0.1, 0.1))
-  }
-  if(gene == "CPEB4")
-  {
-    mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.24, 0.24 + (ncol(xx) - 2) * 0.057, 0.057))
-  }
-  dev.off()
-  if(gene == "TNKS1BP1")
-  {
-    tt <- tt[best.isoform, rev(c("ENST00000528882", "ENST00000358252", "ENST00000527207", "ENST00000532437", "ENST00000427750", "ENST00000530920", "ENST00000532273"))]
-  }
-  if(gene == "TGFA")
-  {
-    tt <- tt[best.isoform, rev(c("ENST00000295400", "ENST00000445399", "ENST00000474101", "ENST00000418333", "ENST00000450929", "ENST00000444975", "ENST00000394241", "ENST00000460808", "ENST00000419940"))]
-  }
-  if(gene == "DUOX1")
-  {
-    tt <- tt[best.isoform, rev(c("ENST00000389037", "ENST00000321429", "ENST00000558322", "ENST00000561220", "ENST00000561166", "ENST00000557893", "ENST00000559716", "ENST00000558991", "ENST00000559219", "ENST00000558446", "ENST00000559221", "ENST00000558744"))]
-  }
-  if(gene == "HNRPDL")
-  {
-    tt <- tt[best.isoform, rev(c("ENST00000295470", "ENST00000507721", "ENST00000502762", "ENST00000349655", "ENST00000514511"))]
-  }
-  if(gene == "CPEB4")
-  {
-    tt <- tt[best.isoform, rev(c("ENST00000265085", "ENST00000334035", "ENST00000520867", "ENST00000519835", "ENST00000522336", "ENST00000519467", "ENST00000519152", "ENST00000517880", "ENST00000518141", "ENST00000522344"))]
-  }
+  #pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_gene_corr.pdf", drug, gene)), height=6, width=6)
+  #par(oma=c(0,0,6,6))
+  #hv <- gplots::heatmap.2(xx, Colv=NA, Rowv=NA, dendrogram="none", col=c(neg.color.palette, color.palette), breaks = c(neg.palette.breaks, palette.breaks), trace="none", key=FALSE,
+  #                        labRow=colnames(xx)[1:ncol(xx)-1], cexRow = 0.1 + 1/ifelse(log10(ncol(xx)-1)==0, 1, log10(ncol(xx)-1)),
+  #                        #labRow=biomarkers.toPlot,
+  #                        labCol=NA)
+  #if(gene == "ENSG00000073792")
+  # {
+  #   mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.29, 0.29 + (ncol(xx) - 2) * 0.07, 0.07))
+  # }
+  # if(gene == "ENSG00000137857")
+  # {
+  #   mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.26, 0.26 + (ncol(xx) - 2) * 0.08, 0.08))
+  # }
+  # if(gene == "ENSG00000170477")
+  # {
+  #   mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.24, 0.24 + (ncol(xx) - 2) * 0.057, 0.057))
+  # }
+  # if(gene == "ENSG00000197958")
+  # {
+  #   mtext(colnames(xx)[2:ncol(xx)], side=3, las=2, at=seq(0.29, 0.29 + (ncol(xx) - 2) * 0.1, 0.1))
+  # }
+  #  dev.off()
+   tt <- tt[best.isoform, isoforms]
   cc <- rep("gray", length(tt))
   cc[which(names(tt) == best.isoform)] <- "red"
   pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_gene_corr_bar_plot.pdf", drug, gene)), height=6, width=2)
@@ -355,30 +341,10 @@ fnCor <- function(drug, gene, xx) {
   abline(v=0.8, lty=2)
   dev.off()
 }
-fnExp <- function(drug, gene, exp) {
+fnExp <- function(drug, gene, exp, best.isoform) {
   tt <- apply(exp, MARGIN=2, function(x){mean(x)})
   tt <- tt/sum(tt, na.rm=T)
   tt[which(is.na(tt))] <- 0
-  if(gene == "TNKS1BP1")
-  {
-    tt <- tt[rev(c("ENST00000528882", "ENST00000358252", "ENST00000527207", "ENST00000532437", "ENST00000427750", "ENST00000530920", "ENST00000532273"))]
-  }
-  if(gene == "TGFA")
-  {
-    tt <- tt[rev(c("ENST00000295400", "ENST00000445399", "ENST00000474101", "ENST00000418333", "ENST00000450929", "ENST00000444975", "ENST00000394241", "ENST00000460808", "ENST00000419940"))]
-  }
-  if(gene == "DUOX1")
-  {
-    tt <- tt[rev(c("ENST00000389037", "ENST00000321429", "ENST00000558322", "ENST00000561220", "ENST00000561166", "ENST00000557893", "ENST00000559716", "ENST00000558991", "ENST00000559219", "ENST00000558446", "ENST00000559221", "ENST00000558744"))]
-  }
-  if(gene == "HNRPDL")
-  {
-    tt <- tt[rev(c("ENST00000295470", "ENST00000507721", "ENST00000502762", "ENST00000349655", "ENST00000514511"))]
-  }
-  if(gene == "CPEB4")
-  {
-    tt <- tt[rev(c("ENST00000265085", "ENST00000334035", "ENST00000520867", "ENST00000519835", "ENST00000522336", "ENST00000519467", "ENST00000519152", "ENST00000517880", "ENST00000518141", "ENST00000522344"))]
-  }
   cc <- rep("gray", length(tt))
   cc[which(names(tt) == best.isoform)] <- "red"
   pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_relative_exp.pdf", drug, gene)), height=6, width=2)

@@ -83,10 +83,11 @@ rsq <- function(model, indices) {
   
   if(is.null(tissue))
   {
-    CIndex <- survcomp::concordance.index(x=-y.hat, surv.time=data[rownames(newPRED),RESP.pos], surv.event=rep(1, length(y.hat)), na.rm=TRUE, outx=TRUE)[[1]]
+    #CIndex <- survcomp::concordance.index(x=-y.hat, surv.time=data[rownames(newPRED),RESP.pos], surv.event=rep(1, length(y.hat)), na.rm=TRUE, outx=TRUE)[[1]]
+    CIndex <- Hmisc::rcorr.cens(x=y.hat, S=data[rownames(newPRED),RESP.pos], outx=TRUE)[[1]]
   }else
   {
-    CIndex <- 0
+    CIndex <- Hmisc::rcorr.cens(x=y.hat, S=data[rownames(newPRED),RESP.pos], outx=TRUE)[[1]]
   }
   
   Yi <- data[rownames(newPRED),RESP.pos] #fitted(newMOD) + residuals(newMOD) # fitted(object) - residuals(object)
@@ -103,7 +104,7 @@ rsq <- function(model, indices) {
   xx<- R2gauss(y=newMOD$y, model=newMOD)
   return(list( rmsd=RMSD, cindex=CIndex, r.squared=R.square, adj.r.squared=Adjusted.R.square, r.squared.train=xx[1,"R2"], adj.r.squared.train=xx[1,"Rajust"]))
 }
-fnboot <- function(models, R) {
+fnboot <- function(models, R, effect.size) {
   boot.res <- list()
   for(i in 1:length(models))
   {
@@ -115,13 +116,13 @@ fnboot <- function(models, R) {
   set.seed(1)
   for(i in 1:R)
   {
-    indices <- sample(idx,replace=TRUE)
+    indices <- sample(idx, replace=TRUE)
     for(j in 1:length(models))
     {
       M <- names(models)[j]
       if(!is.null(models[[M]]$object))
       {
-        switch(stat, "r.squared"={
+        switch(effect.size, "r.squared"={
           boot.res[[M]] <- c(boot.res[[M]], rsq(model=models[[M]], indices)$r.squared)
         }, "rmsd"= {
           boot.res[[M]] <- c(boot.res[[M]], rsq(model=models[[M]], indices)$rmsd)
@@ -137,7 +138,7 @@ fnboot <- function(models, R) {
       }
     }
   }
-  if(stat == "r.squared & cindex") {
+  if(effect.size == "r.squared & cindex") {
     return(list(cindex=boot.res2, r.squared=boot.res))
   }
   return(boot.res)
@@ -201,7 +202,7 @@ fnPRESS <- function (object, data, formula, verbose=TRUE) {
   TSS <- sum((Yi - mean(Yi))^2)
   RSS <- sum(PRESS.res^2)
   P.square <- 1 - (RSS/TSS)
-  return(list(stat=sum(PRESS.res^2), residuals=PRESS.res,
+  return(list(effect.size=sum(PRESS.res^2), residuals=PRESS.res,
               P.square=P.square))
 }
 fnIsoforms_of_Gene <- function(Gene_Map=ensembl.map.genes.isoforms, GeneID) {
@@ -431,22 +432,22 @@ fnSelectBestIsoformOneDataSet <- function(drug, nullModel, weight, isoforms, ass
   }
   return(list(best.model=best.model, best.isoform=best))
 }
-fnRunbootstrap <- function (models) {
+fnRunbootstrap <- function (models, effect.size) {
   boot.models <- list()
   for (i in 1:length(models)){
     boot.models[[i]] <- list(data=models[[i]]$dataset, formula=models[[i]]$formula, object=models[[i]]$model)
     names(boot.models)[i] <- names(models)[i]
   }
-  M_res <- fnboot(models=boot.models, R=100)
+  M_res <- fnboot(models=boot.models, R=100, effect.size=effect.size)
   return(M_res)
 }
-fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sample.no.threshold=5, drugs) {
+fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sample.no.threshold=5, drugs, effect.size=effect.size) {
   Models <- c("M0", "M1", "M2", "M3", "M3B")
   if(is.null(drugs)){drugs <- colnames(ccle.drug.sensitivity)}
   P_values <- list()
   best.isoforms <- character(length=length(drugs))
   statistics <- list()
-  if(stat == "r.squared & cindex"){statistics.cindex <- statistics; P_values.cindex <- P_values}
+  if(effect.size == "r.squared & cindex"){statistics.cindex <- statistics; P_values.cindex <- P_values}
   #layout(matrix(1:24,6,4))
   i <- 0
   for(drug in drugs)
@@ -466,7 +467,7 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
     names(statistics)[i] <- drug
     
     P_values[[i]][2:nrow(P_values[[i]]),1] <- 0; for(ip in 1:(nrow(P_values[[i]]) -1)){P_values[[i]][ip,(ip+1):ncol(P_values[[i]])] <- 1}
-    if(stat == "r.squared & cindex"){
+    if(effect.size == "r.squared & cindex"){
       statistics.cindex[[i]] <- statistics[[i]]
       P_values.cindex[[i]] <- P_values[[i]]
       names(P_values.cindex)[i] <- drug
@@ -541,11 +542,11 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
       switch(statistical.method,
              "bootstrap"={
                
-               results <- list(ccle=fnRunbootstrap(models=predictors.ccle),
-                               gdsc=fnRunbootstrap(models=predictors.gdsc))
+               results <- list(ccle=fnRunbootstrap(models=predictors.ccle, effect.size=effect.size),
+                               gdsc=fnRunbootstrap(models=predictors.gdsc, effect.size=effect.size))
                
-               if((stat == "r.squared") || (stat == "adj.r.squared") || (stat == "cindex") || (stat == "r.squared & cindex")){direction="greater"}else{direction="less"}
-               if(stat == "r.squared & cindex"){
+               if((effect.size == "r.squared") || (effect.size == "adj.r.squared") || (effect.size == "cindex") || (effect.size == "r.squared & cindex")){direction="greater"}else{direction="less"}
+               if(effect.size == "r.squared & cindex"){
                  tt <- results
                  results <- list(ccle=results[["ccle"]][["cindex"]], 
                                  gdsc=results[["gdsc"]][["cindex"]])
@@ -662,7 +663,7 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
           }
         }
       }
-      if(stat == "r.squared & cindex"){
+      if(effect.size == "r.squared & cindex"){
         for(j in 2:length(Models))
         {
           P_values.cindex[[i]][j, "M0"] <- 0
@@ -681,13 +682,13 @@ fnSensitivityCompare <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, sa
     }
     
   }
-  if(stat == "r.squared & cindex"){
+  if(effect.size == "r.squared & cindex"){
     return (list(p.values.r.squared=P_values, p.values.cindex=P_values.cindex, statistics.r.squared=statistics, statistics.cindex=statistics.cindex, best.isoforms=best.isoforms))
   }
   return (list(p.values=P_values, statistics=statistics, best.isoforms=best.isoforms))
 }
 
-fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, assay=c("gray", "gCSI",  "ccle", "gdsc"), sample.no.threshold=5, drugs) {
+fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID, assay=c("gray", "gCSI",  "ccle", "gdsc"), sample.no.threshold=5, drugs, effect.size) {
   Models <- c("M0", "M1", "M2", "M3", "M3B")
   if(is.null(drugs)){drugs <- colnames(ccle.drug.sensitivity)}
   P_values <- list()
@@ -766,7 +767,7 @@ fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID,
       switch(statistical.method,
              "bootstrap"={
                
-               results <- fnRunbootstrap(models=predictors)
+               results <- fnRunbootstrap(models=predictors, effect.size=effect.size)
                
                for(j in 1:length(Models))
                {
@@ -780,7 +781,7 @@ fnSensitivityOneDataSet <- function (MicroArrayExp, Gene_FPKM, Isoforms, GeneID,
                  }
                }
                
-               if((stat== "r.squared") || (stat== "adj.r.squared") || (stat== "cindex")){direction="greater"}else{direction="less"}
+               if((effect.size== "r.squared") || (effect.size== "adj.r.squared") || (effect.size== "cindex")){direction="greater"}else{direction="less"}
                
                for(j in 1:(length(Models) - 1))
                {

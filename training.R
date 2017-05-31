@@ -18,7 +18,7 @@ subset.genes <- as.character(args[12])# c(TRUE,FALSE)
 subset.genes.method <- as.character(args[13]) #c("expression.cut.off", "biotype")
 
 statistical.method <- "bootstrap" #c("anova", "crossvalidation", "bootstrap")
-stat <- "r.squared & cindex" #c("adj.r.squared", "r.squared", "rmsd", "cindex","r.squared & cindex")
+effect.size <- "r.squared & cindex" #c("adj.r.squared", "r.squared", "rmsd", "cindex","r.squared & cindex")
 
 myf <- "/mnt/work1/users/bhklab/Users/zhaleh/ccledrug/data/training_ccle_gdsc.RData"
 load("/mnt/work1/users/bhklab/Users/zhaleh/ensembl.map.genes.isoforms.GRCh38.87.RData", verbose=TRUE)
@@ -31,6 +31,41 @@ if(!file.exists(myf)){
   #load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC1000.RData", verbose=TRUE)
   #GDSC <- GDSC1000
   load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC.RData", verbose=TRUE)
+  
+  ###remove noisy cases and those with not matching snp profiles
+  snp.outliers <- c(
+    "LC-1F",
+    "HCC1937",
+    "MDA-MB-468",
+    "HuH-7",
+    "SW403",
+    "COR-L51",
+    "MOG-G-CCM",
+    "NB4")
+  
+  ccle.filter <- filterNoisyCurves(CCLE, nthread=detectCores())
+  lapply(ccle.filter, length)#123 noisy#11547 ok
+  
+  gdsc.filter <- filterNoisyCurves(GDSC, nthread=detectCores())
+  lapply(gdsc.filter, length)#$noisy 2315 #ok 77588
+  
+  CCLE@sensitivity$info <- CCLE@sensitivity$info[ccle.filter$ok, ]
+  CCLE@sensitivity$raw <- CCLE@sensitivity$raw[ccle.filter$ok, , ]
+  CCLE@sensitivity$profiles <- CCLE@sensitivity$profiles[ccle.filter$ok, ]
+  
+  GDSC@sensitivity$info <- GDSC@sensitivity$info[gdsc.filter$ok, ]
+  GDSC@sensitivity$raw <- GDSC@sensitivity$raw[gdsc.filter$ok, , ]
+  GDSC@sensitivity$profiles <- GDSC@sensitivity$profiles[gdsc.filter$ok, ]
+  
+  match(snp.outliers, PharmacoGx::cellNames(CCLE))
+  ccle.cells <- setdiff(PharmacoGx::cellNames(CCLE), snp.outliers)
+  CCLE <- PharmacoGx::subsetTo(pSet=CCLE, cells=ccle.cells)
+  save(CCLE, file="/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE_hs_clarified.RData")
+  
+  gdsc.cells <- setdiff(PharmacoGx::cellNames(GDSC), snp.outliers)
+  GDSC <- PharmacoGx::subsetTo(pSet=GDSC, cells=gdsc.cells)
+  save(GDSC, file="/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC_clarified.RData")
+  
   if(training.method== "ccle_gdsc") {
     ##Restrict analyses to common cells
     #   common <- PharmacoGx::intersectPSet(pSets=list("CCLE"=CCLE, "GDSC"=GDSC), strictIntersect=FALSE)
@@ -83,7 +118,7 @@ if(!file.exists(myf)){
     ccle.genes.fpkm <- log2(ccle.genes.fpkm + 1)
     ccle.isoforms.fpkm <- log2(ccle.isoforms.fpkm + 1)
   }
-  
+
   ccle.cells <- intersectList(rownames(ccle.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
   gdsc.cells <- intersectList(rownames(gdsc.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
   
@@ -95,7 +130,7 @@ if(!file.exists(myf)){
       genes <- as.character(ff[grep("pseudogene", ff$GeneBioType, invert=TRUE), "EnsemblGeneId"])
       #genes <- as.character(ff[grep("protein_coding", ff$GeneBioType), "EnsemblGeneId"])
     }else{ #subset.genes.method == "expression.cut.off"
-      exprs.cut.off <- 0.2 * nrow(ccle.genes.fpkm)
+      exprs.cut.off <- 0.1 * nrow(ccle.genes.fpkm)
       
       xx <- apply(ccle.genes.fpkm, MARGIN=2, function(x){length(which(x > 0))})
       genes.expressed <- names(xx)[which(xx > exprs.cut.off)]
@@ -119,6 +154,8 @@ if(!file.exists(myf)){
   ccle.genes.fpkm <- ccle.genes.fpkm[, genes, drop=FALSE]
   ccle.isoforms.fpkm <- ccle.isoforms.fpkm[, isoforms, drop=FALSE]
   GeneList <- genes
+  #dim(ccle.genes.fpkm) 925 35638
+  #dim(ccle.isoforms.fpkm) 925 140331
   ## for logistic regression
   
   if(glm.family == "binomial")
@@ -126,7 +163,11 @@ if(!file.exists(myf)){
     for(c in colnames(ccle.drug.sensitivity)){ccle.drug.sensitivity[,c] <- factor(ccle.drug.sensitivity[, c])}
     for(c in colnames(gdsc.drug.sensitivity)){gdsc.drug.sensitivity[,c] <- factor(gdsc.drug.sensitivity[, c])}
   }
-  save(drugs, ccle.drug.sensitivity, gdsc.drug.sensitivity, tissueTypes, ccle.genes.fpkm, ccle.isoforms.fpkm, ccle.cells, gdsc.cells, GeneList, file=myf)
+  annot.ensembl.all.genes <- Biobase::fData(CCLE@molecularProfiles$rnaseq)[genes, ]
+  annot.ensembl.all.isoforms <- Biobase::fData(CCLE@molecularProfiles$isoforms)[isoforms, ]
+  ccle.cell.profiles <- CCLE@cell
+  
+  save(drugs, ccle.drug.sensitivity, gdsc.drug.sensitivity, tissueTypes, ccle.genes.fpkm, ccle.isoforms.fpkm, ccle.cells, gdsc.cells, GeneList, annot.ensembl.all.genes, annot.ensembl.all.isoforms, ccle.cell.profiles, file=myf)
 }else{
   load(myf, verbose=TRUE)
 }
@@ -150,7 +191,7 @@ for(i in startIndex: finishIndex)
   #Gene <- "ENSG00000146648" EGFR drugs <- c("TAE684", "Crizotinib", "PLX4720", "lapatinib", "Erlotinib")  expression is supposed to be predictive to Erlotinib
   #Gene <-  "ENSG00000181019" "1728" #NQO1 "3480" #IGF1R
   #Gene <- "ENSG00000148426" "C10orf47"
-  #MicroArrayExp <- ccle.drug.microarray.exp[,Gene]; Gene_FPKM <- ccle.genes.fpkm[,Gene]; Isoforms <- fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene); GeneID <- Gene;  model.method <- "npreg"; method <- "bootstrap"; stat <- "adj.r.squared";glm.family <- "gaussian"; tissue <- NULL; sample.no.threshold <- 5; assay <- "ccle"
+  #MicroArrayExp <- ccle.drug.microarray.exp[,Gene]; Gene_FPKM <- ccle.genes.fpkm[,Gene]; Isoforms <- fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene); GeneID <- Gene;  model.method <- "npreg"; method <- "bootstrap"; effect.size <- "adj.r.squared";glm.family <- "gaussian"; tissue <- NULL; sample.no.threshold <- 5; assay <- "ccle"
   #which(fData(common$CCLE@molecularProfiles$rnaseq)[, "EntrezGeneId"]=="1728") #18024
   Gene <- as.character(GeneList[i])
   #print(Gene)
@@ -160,21 +201,24 @@ for(i in startIndex: finishIndex)
                                         Gene_FPKM=ccle.genes.fpkm[,Gene],
                                         Isoforms=fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene),
                                         GeneID=Gene,
-                                        drugs=drugs)
+                                        drugs=drugs,
+                                        effect.size=effect.size)
   }else if(training.method == "gCSI"){
     sensitivity <- fnSensitivityOneDataSet(MicroArrayExp=NULL,
                                            Gene_FPKM= gCSI.genes.fpkm[,Gene],
                                            Isoforms=fnIsoformsExp(Isoforms_FPKM=gCSI.isoforms.fpkm, GeneId=Gene),
                                            GeneID=Gene,
-                                           assay=training.method)
+                                           assay=training.method,
+                                           effect.size=effect.size)
   }else{
     sensitivity <- fnSensitivityOneDataSet(MicroArrayExp=NULL,
                                            Gene_FPKM= ccle.genes.fpkm[,Gene],
                                            Isoforms=fnIsoformsExp(Isoforms_FPKM=ccle.isoforms.fpkm, GeneId=Gene),
                                            GeneID=Gene,
-                                           assay=training.method)
+                                           assay=training.method,
+                                           effect.size=effect.size)
   }
-  if(stat == "r.squared & cindex") {
+  if(effect.size == "r.squared & cindex") {
     pvalues.r.squared[[Gene]] <- sensitivity$p.values.r.squared
     pvalues.cindex[[Gene]] <- sensitivity$p.values.cindex
     statistics.r.squared[[Gene]] <- sensitivity$statistics.r.squared
@@ -187,7 +231,7 @@ for(i in startIndex: finishIndex)
   }
   print(sprintf("Models of Gene %s [%d] is built at %s", Gene, i, Sys.time()))
 }
-if(stat == "r.squared & cindex") {
+if(effect.size == "r.squared & cindex") {
   both.drug.association.adj.r.squared.pvalues <- list("r.squared"=pvalues.r.squared, "cindex"=pvalues.cindex)
   both.drug.association.statistics <- list("r.squared"=statistics.r.squared, "cindex"=statistics.cindex)
 }else{

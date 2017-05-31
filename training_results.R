@@ -1,4 +1,4 @@
-file.sensitivity <- "auc_recomputed_drug_association_ccle_gdsc.RData"
+file.sensitivity <- "auc_recomputed_drug_association.RData"
 
 require(stringr) || stop("Library stringr is not available!")
 require(corrplot) || stop("Library corrplot is not available!")
@@ -27,43 +27,22 @@ model.method <- "glm"
 glm.family <- "gaussian" 
 effect.size <- "cindex" #c("r.squared", "cindex")
 adjustment.method <- "fdr"#c("bonferroni", "fdr")
-subset.genes <- TRUE
-subset.genes.method <- "wide.expression" #c("wide.expression", "biotype")
-RNA_seq.normalize <- TRUE
 
-training.type <- "CCLE_GDSC"#ifelse(regexpr("ccle", file.sensitivity) >= 1, "CCLE", "CCLE_GDSC")
-sensitivity.type <- paste0(unlist(strsplit(file.sensitivity, "_"))[1:2], collapse="_") 
 breast.specific <- ifelse(regexpr("breast", file.sensitivity) < 1, FALSE, TRUE)
 data.type <- ifelse(regexpr("mutation", file.sensitivity) >= 1, "all", "expression")
 
 source(file.path(path.code, "foo.R"))
 
-load(file.path(path.data, "PSets/CCLE_hs.RData"), verbose=TRUE)
-#load(file.path(path.data, "PSets/CCLE.CTRPv2.RData"), verbose=TRUE)
-#CCLE <- CCLE.CTRPv2
-
-load(file.path(path.data, "PSets/GDSC.RData"), verbose=TRUE)
-#load(file.path(path.data, "PSets/GDSC1000.RData"), verbose=TRUE)
-#GDSC <- GDSC1000
-
-
-## It assumes the sensitive and resistent weights are 3rd and 4th strings seperated by underline in file.sensitivity name
-if(sensitivity.type == "slope_recomputed") {
-  if(training.type == "CCLE_GDSC") {
-    ss<- unlist(strsplit(file.sensitivity, "_"))
-    res.weight <- as.numeric(ss[3]); sens.weight <- as.numeric(ss[4]);
-    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
-  }else {
-    ss <- unlist(strsplit(file.sensitivity, "_"))
-    res.weight <- as.numeric(ss[4]); sens.weight <- as.numeric(ss[5]);
-    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))    
-  }
-}else{
-  ss <- unlist(strsplit(file.sensitivity, "_"))
-  #path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
-  path.diagrams<- "result/auc_recomputed_ccle_gdsc"
-}
+path.diagrams<- "result/auc_recomputed_ccle_gdsc"
 if (!file.exists(path.diagrams)){dir.create(file.path(path.diagrams))}
+
+path.training.data <- "data/training_ccle_gdsc.RData"
+load(path.training.data, verbose=TRUE)
+if("gdsc.drug.sensitivity" %in% ls()) {
+  training.type <-"CCLE_GDSC"
+} else {
+  training.type <-"CCLE"
+}
 
 if(data.type == "all") {
   Models <- c("M2", "M3B", "MM", "MC")
@@ -74,73 +53,8 @@ if(data.type == "all") {
 }
 names(Models.names) <- Models
 
-if(training.type == "CCLE_GDSC") {
-  #common <- PharmacoGx::intersectPSet(pSets=list("CCLE"=CCLE, "GDSC"=GDSC), strictIntersect=F)
-  #cells <- intersect(common$CCLE@cell$cellid, pData(common$CCLE@molecularProfiles$isoforms)[, "cellid"])
-  #common$CCLE@molecularProfiles$rnaseq <- CCLE@molecularProfiles$rnaseq[, rownames(pData(CCLE@molecularProfiles$isoforms))]
-  #CCLE <- common$CCLE
-  #GDSC <- common$GDSC
-  drugs <- intersect(PharmacoGx::drugNames(CCLE), PharmacoGx::drugNames(GDSC))
-  gdsc.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GDSC, sensitivity.measure=sensitivity.type, drugs=drugs))
-}else{
-  drugs <- drugNames(CCLE)
-}
-
-ccle.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=CCLE, sensitivity.measure=sensitivity.type, drugs=drugs))
-
-if(as.character(sensitivity.type) == "slope_recomputed") {
-  ##manual cutoff for sensitivity calls based on slope
-  cutoff <- 0.27
-  ccle.drug.sensitivity.wighted <- ccle.drug.sensitivity
-  ccle.drug.sensitivity.wighted[ccle.drug.sensitivity.wighted < cutoff] <- res.weight
-  ccle.drug.sensitivity.wighted[ccle.drug.sensitivity.wighted >= cutoff] <- sens.weight
-  
-  gdsc.drug.sensitivity.wighted <- gdsc.drug.sensitivity
-  gdsc.drug.sensitivity.wighted[gdsc.drug.sensitivity.wighted < cutoff] <- res.weight
-  gdsc.drug.sensitivity.wighted[gdsc.drug.sensitivity.wighted >= cutoff] <- sens.weight
-  
-  ccle.drug.sensitivity <- ccle.drug.sensitivity.wighted * ccle.drug.sensitivity
-  gdsc.drug.sensitivity <- gdsc.drug.sensitivity.wighted * gdsc.drug.sensitivity
-}
-
-features <- fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"]
-features <- intersect(fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"], features)
-if(data.type == "all"){
-  features <- intersect(fData(CCLE@molecularProfiles$mutation)[,"EnsemblGeneId"], features)
-  features <- intersect(fData(CCLE@molecularProfiles$cnv)[,"EnsemblGeneId"], features)
-  mutation.features <- rownames(fData(CCLE@molecularProfiles$mutation))[match(features, fData(CCLE@molecularProfiles$mutation)[,"EnsemblGeneId"])]
-  cnv.features <- rownames(fData(CCLE@molecularProfiles$cnv))[match(features, fData(CCLE@molecularProfiles$cnv)[,"EnsemblGeneId"])]
-}
-rnaseq.features <- rownames(fData(CCLE@molecularProfiles$rnaseq))[which(fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"] %in% features)]
-isoforms.features <- rownames(fData(CCLE@molecularProfiles$isoforms))[which(fData(CCLE@molecularProfiles$isoforms)[,"EnsemblGeneId"] %in% features)]
-
-if(data.type == "all"){
-  ccle.mutation <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="mutation", features=mutation.features, fill.missing=FALSE, summary.stat="or")))
-  colnames(ccle.mutation) <- fData(CCLE@molecularProfiles$mutation)[,"EnsemblGeneId"][match(colnames(ccle.mutation), rownames(fData(CCLE@molecularProfiles$mutation)))]
-  ccle.cnv <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="cnv", features=cnv.features, fill.missing=FALSE)))
-  colnames(ccle.cnv) <- fData(CCLE@molecularProfiles$cnv)[,"EnsemblGeneId"][match(colnames(ccle.cnv), rownames(fData(CCLE@molecularProfiles$cnv)))]
-}
-ccle.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="rnaseq", features=rnaseq.features, fill.missing=FALSE)))
-ccle.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=CCLE, mDataType="isoforms", features=isoforms.features, fill.missing=FALSE)))
-ccle.isoforms.fpkm[which(is.na(ccle.isoforms.fpkm))] <- 0
-if(RNA_seq.normalize == TRUE)
-{
-  ccle.genes.fpkm <- log2(ccle.genes.fpkm + 1)
-  ccle.isoforms.fpkm <- log2(ccle.isoforms.fpkm + 1)
-}
-
-if(data.type == "all"){
-  ccle.cells <- intersectList(rownames(ccle.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm), rownames(ccle.mutation), rownames(ccle.cnv))
-  gdsc.cells <- intersectList(rownames(gdsc.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm), rownames(ccle.mutation), rownames(ccle.cnv))
-}else{
-  ccle.cells <- intersectList(rownames(ccle.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
-  gdsc.cells <- intersectList(rownames(gdsc.drug.sensitivity), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
-}
-
-ccle.tissuetype <- as.data.frame(CCLE@cell[, "tissueid"], row.names=CCLE@cell[, "cellid"])
-colnames(ccle.tissuetype) <- "tissue.type"
-
-tissueTypes <- ccle.tissuetype
+ccle.tissuetype <- tissueTypes
+ccle.tissuetype[,1] <- as.character(ccle.tissuetype[,1])
 ccle.primary.tissuetype <- ccle.tissuetype
 ccle.primary.drug.sensitivity <- ccle.drug.sensitivity
 
@@ -189,42 +103,6 @@ colnames(best.isoforms.matrix) <- drugs
 rownames(best.isoforms.matrix) <- names(drug.association)
 
 Min.Pvalues <- NULL
-genes <- fData(CCLE@molecularProfiles$rnaseq)[, "EnsemblGeneId"]
-
-if(subset.genes){
-  if(subset.genes.method == "biotype"){
-    ### subsetting genes to remove pseudogenes
-    ff <- fData(CCLE@molecularProfiles$rnaseq)
-    genes <- as.character(ff[grep("pseudogene", ff$GeneBioType, invert=TRUE), "EnsemblGeneId"])
-    #genes <- as.character(ff[grep("protein_coding", ff$GeneBioType), "EnsemblGeneId"])
-  }else{ #subset.genes.method == "wide.expression"
-    express.cut.off <- 0.2 * nrow(ccle.genes.fpkm)
-    
-    xx <- apply(ccle.genes.fpkm, MARGIN=2, function(x){length(which(x > 0))})
-    genes.expressed.well <- names(xx)[which(xx > express.cut.off)]
-    length(genes.expressed.well) #41748
-    
-    tt <- apply(ccle.isoforms.fpkm, MARGIN=2, function(x){length(which(x > 0))})
-    
-    isoforms.expressed.well <- names(tt)[which(tt > express.cut.off)]
-    length(isoforms.expressed.well) #124258
-    genes.of.isoforms.expressed.well <- unique(fData(CCLE@molecularProfiles$isoforms)[match(isoforms.expressed.well, fData(CCLE@molecularProfiles$isoforms)[, "EnsemblTranscriptId"]), "EnsemblGeneId"])
-    length(genes.of.isoforms.expressed.well) #30614
-    genes <- intersect(genes.expressed.well, genes.of.isoforms.expressed.well)
-    length(genes) #30614
-  }
-  FDR_List <- FDR_List[genes, , drop=FALSE]
-  estimate_List <- estimate_List[genes, , drop=FALSE]
-  Pvalues.Numinals <- Pvalues.Numinals[genes, , drop=FALSE]
-  statistics.matrix <- statistics.matrix[genes, , drop=FALSE]
-  best.isoforms.matrix <- best.isoforms.matrix[genes, , drop=FALSE]
-  
-  Min.Pvalues <- Min.Pvalues[genes]
-  ###########################################
-}
-drug.association <- drug.association[genes]
-drug.association.statistics <- drug.association.statistics[genes]
-drug.association.best.isoforms <- drug.association.best.isoforms[genes]
 for(i in drugs) {
   statistics.matrix[,paste(i, "M0",sep ="_")] <- sapply(drug.association.statistics, function(x){ifelse(!is.null(x[[i]]["median", "M0"]), x[[i]]["median", "M0"], 0)})
   for(j in 1:length(Models)) {
@@ -246,26 +124,26 @@ for(i in drugs) {
 #   }
 # }
 
-if(file.exists("data/isoforms.no.per.gene.GRCh38.87.RData")){
-  load("data/isoforms.no.per.gene.GRCh38.87.RData", verbose=TRUE)
+if(file.exists("data/isoforms.no.per.gene.modified.version.GRCh38.87.RData")){
+  load("data/isoforms.no.per.gene.modified.version.GRCh38.87.RData", verbose=TRUE)
 }else{
   load("data/ensembl.map.genes.isoforms.GRCh38.87.RData")
   fnNumber_Isoforms_of_Gene <- function(Gene_Map=ensembl.map.genes.isoforms, GeneId)
   {
-    return(nrow(data.frame(strsplit(Gene_Map[, as.character(GeneId)], ","))))
+    return(length(which(unlist(strsplit(Gene_Map[, as.character(GeneId)], ",")) %in% colnames(ccle.isoforms.fpkm))))
   }
   
-  isoforms_No_List <- matrix(NA, ncol=1, nrow=nrow(fData(CCLE@molecularProfiles$rnaseq)))
+  isoforms_No_List <- matrix(NA, ncol=1, nrow=nrow(annot.ensembl.all.genes))
   colnames(isoforms_No_List) <- "isoforms.NO"
-  rownames(isoforms_No_List) <- rownames(fData(CCLE@molecularProfiles$rnaseq))
+  rownames(isoforms_No_List) <- rownames(annot.ensembl.all.genes)
   for( i in 1:nrow(isoforms_No_List))
   {
     isoforms_No_List[i,] <- fnNumber_Isoforms_of_Gene(GeneId=as.character(rownames(isoforms_No_List)[i]))
   }
   isoforms_No_List <- data.frame(isoforms_No_List,stringsAsFactors=FALSE)
-  save(isoforms_No_List, file="data/isoforms.no.per.gene.GRCh38.87.RData")  
+  save(isoforms_No_List, file="data/isoforms.no.per.gene.modified.version.GRCh38.87.RData")  
 }
-isoforms_No_List <- isoforms_No_List[genes, , drop=FALSE]
+isoforms_No_List <- isoforms_No_List[GeneList, , drop=FALSE]
 save(FDR_List, estimate_List, Pvalues.Numinals, statistics.matrix, best.isoforms.matrix, Min.Pvalues, isoforms_No_List, file= file.path(path.diagrams, "allGenes_association_matrices.RData"))
 
 
@@ -273,14 +151,14 @@ save(FDR_List, estimate_List, Pvalues.Numinals, statistics.matrix, best.isoforms
 
 source("code/foo.R")
 
-result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=0.01, effect.sizeCutOff=0.55)
+result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=0.01, effect.size_CutOff=0.55)
 write.csv(fnWilcox(result.effect.size, TRUE)$comparison, file=file.path(path.diagrams, "comparison_test_wilcox.csv"))
-barplot.models(model=result.effect.size, isoforms_No="all", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
+barplot.models(model=result.effect.size, isoforms_No="all", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=1.2)
 barplot.models(model=result.effect.size, isoforms_No="1.isoform", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 barplot.models(model=result.effect.size, isoforms_No="n.isoforms", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 barplot.models(model=result.effect.size, isoforms_No="all", sign="positive", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 barplot.models(model=result.effect.size, isoforms_No="all", sign="negative", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
-associations <- associations.all.drugs(model.rank="M3B", annot.ensembl.all.genes=fData(CCLE@molecularProfiles$rnaseq))
+associations <- associations.all.drugs(model.rank="M3B", annot.ensembl.all.genes=annot.ensembl.all.genes)
 save(associations, file=file.path(path.diagrams, "associations.RData"))
 ##all.biomarkers would include all the significant biomarkers
 all.biomarkers <- fnTop.significant.biomarkers(associations, cut_off=0.01, BioNo="all", rank.type="pvalue.adj")
@@ -328,20 +206,122 @@ colnames(TOP) <- c("symbol", "isoforms.no", "biomarker.id", "type", "specificity
 for( i in names(all.biomarkers)) {
   xx <- which.max(all.biomarkers[[i]][,effect.size])
   #xx <- 1
-  TOP[i, "symbol"] <- as.character(all.biomarkers[[i]][xx, "symbol"])
-  TOP[i, "isoforms.no"] <- all.biomarkers[[i]][xx, "isoforms.no"]
-  TOP[i, "biomarker.id"] <- as.character(all.biomarkers[[i]][xx, "biomarker.id"])
-  TOP[i, "type"] <- all.biomarkers[[i]][xx, "type"]
-  TOP[i, "specificity"] <- all.biomarkers[[i]][xx, "specificity"]
-  TOP[i, "estimate"] <- all.biomarkers[[i]][xx, "estimate"]
-  TOP[i, effect.size] <- all.biomarkers[[i]][xx, effect.size]
-  TOP[i, "fdr"] <- all.biomarkers[[i]][xx, adjustment.method]
-  TOP[i, "delta.rank"] <- all.biomarkers[[i]][xx, "delta.rank"]
+  if(length(xx) > 0) {
+    TOP[i, "symbol"] <- as.character(all.biomarkers[[i]][xx, "symbol"])
+    TOP[i, "isoforms.no"] <- all.biomarkers[[i]][xx, "isoforms.no"]
+    TOP[i, "biomarker.id"] <- as.character(all.biomarkers[[i]][xx, "biomarker.id"])
+    TOP[i, "type"] <- all.biomarkers[[i]][xx, "type"]
+    TOP[i, "specificity"] <- all.biomarkers[[i]][xx, "specificity"]
+    TOP[i, "estimate"] <- all.biomarkers[[i]][xx, "estimate"]
+    TOP[i, effect.size] <- all.biomarkers[[i]][xx, effect.size]
+    TOP[i, "fdr"] <- all.biomarkers[[i]][xx, adjustment.method]
+    TOP[i, "delta.rank"] <- all.biomarkers[[i]][xx, "delta.rank"]
+  }
 }
 write.csv(TOP, file=file.path(path.diagrams, "TopOne.csv"))
 
 Check.KnownAssociations(associations)
 
 percentage.biomarkers.type <- fnPercentageBiomarkersType(all.biomarkers)
-mystacked.barplot.simple(Filename=file.path(path.diagrams, "ProportionBiomarkersType.pdf"), data=percentage.biomarkers.type, main.label="Proportion of specificity of biomarkers", cex=.7)
+mystacked.barplot.simple(Filename=file.path(path.diagrams, "ProportionBiomarkersType.pdf"), data=percentage.biomarkers.type, main.label="Proportion of specificity of biomarkers", cex=1.2)
+
+## annotation of differnet set of biomarkers based on their # of isoforms
+mycol <- RColorBrewer::brewer.pal(n=3, name="Set1")[c(2,1)]
+isoform.specific<- gene.specific<- common <- matrix(NA, nrow=length(all.biomarkers), ncol=2, dimnames=list(names(all.biomarkers), c("1 isoform", "n isoforms")))
+pdf("result/auc_recomputed_ccle_gdsc/biomarkers_specificity_isoform_no.pdf", width=21, height=5)
+par(mfrow=c(1,3))
+par(mar=c(7.1, 4.1, 4.1, 10.1), xpd=TRUE)
+rr <- list()
+for(drug in names(all.biomarkers)){
+  xx <- table(all.biomarkers[[drug]]$specificity, all.biomarkers[[drug]]$isoforms.no)
+  mm <- apply(xx, MARGIN=1, function(x){s <- x[which(x!=0)];c(s[1], (sum(s)-s[1]))})
+  common[drug, ] <- if("common" %in% colnames(mm)){mm[,"common"]}else{c(0,0)}
+  gene.specific[drug, ] <- if("gene.specific" %in% colnames(mm)){mm[,"gene.specific"]}else{c(0,0)}
+  isoform.specific[drug, ] <- if("isoform.specific" %in% colnames(mm)){mm[,"isoform.specific"]}else{c(0,0)}
+  rr[[drug]] <- mm
+}
+common <- common/apply(common,MARGIN = 1, function(x){ss<- sum(x);ifelse(ss!=0, ss, 1)})
+barplot(t(common), las=2,col=mycol[1:2], main="common", ylab="percentage")
+
+
+gene.specific <- gene.specific/apply(gene.specific,MARGIN = 1, function(x){ss<- sum(x);ifelse(ss!=0, ss, 1)})
+barplot(t(gene.specific), las=2,col=mycol[1:2], main="gene specific", ylab="percentage")
+
+
+isoform.specific <- isoform.specific/apply(isoform.specific,MARGIN = 1, function(x){ss<- sum(x);ifelse(ss!=0, ss, 1)})
+barplot(t(isoform.specific), las=2,col=mycol[1:2], main="isoform specific", ylab="percentage")
+legend("topright", inset=c(-0.2,0), legend = colnames(isoform.specific), fill = mycol[1:2], bty="n")
+dev.off()
+## annotation of differnet set of biomarkers based on their biotaypes
+##update all.biomarkers with gene/transcript biotypes
+for(drug in names(all.biomarkers)) {
+  ii <- which(all.biomarkers[[drug]][,"type"] == "isoform")
+  gg <- which(all.biomarkers[[drug]][,"type"] == "gene")
+  if(length(ii) > 0){
+    all.biomarkers[[drug]][ii, "biotype"] <- annot.ensembl.all.isoforms[all.biomarkers[[drug]][ii, "transcript.id"], "TranscriptBioType"]
+  }
+  if(length(gg) > 0){
+    all.biomarkers[[drug]][gg, "biotype"] <- annot.ensembl.all.genes[all.biomarkers[[drug]][gg, "gene.id"], "GeneBioType"]
+  }
+}
+mycol3 <- RColorBrewer::brewer.pal(n=5, name="Set3")
+pdf("result/auc_recomputed_ccle_gdsc/biomarkers_specificity_biotypes.pdf", width=21, height=5)
+par(mfrow=c(1,3))
+par(mar=c(7.1, 4.1, 4.1, 10.1), xpd=TRUE)
+biotypes <- c("protein_coding", "antisense", "processed_transcript", "lincRNA")
+isoform.specific<- gene.specific<- common <- matrix(0, nrow=length(all.biomarkers), ncol=length(biotypes)+1, dimnames=list(names(all.biomarkers), c(biotypes, "other")))
+for(drug in names(all.biomarkers)){
+  if(all(!is.na(all.biomarkers[[drug]]$specificity))){
+    xx <- table(all.biomarkers[[drug]]$specificity, all.biomarkers[[drug]]$biotype)
+    mm <- cbind(xx[, intersect(biotypes, colnames(xx))], "other"=apply(xx[,which(!colnames(xx) %in% biotypes), drop=FALSE], 1, sum))
+    if("common" %in% rownames(mm)){
+      common[drug, colnames(mm)] <- mm["common",]/apply(mm , 1, sum)["common"]
+    }
+    if("gene.specific" %in% rownames(mm)){
+      gene.specific[drug, colnames(mm)] <- mm["gene.specific",]/apply(mm , 1, sum)["gene.specific"]
+    }
+    if("isoform.specific" %in% rownames(mm)){
+      isoform.specific[drug, colnames(mm)] <- mm["isoform.specific",]/apply(mm , 1, sum)["isoform.specific"]
+    }
+  }
+}
+barplot(t(common), las=2,col=mycol3, main="common", ylab="percentage")
+barplot(t(gene.specific), las=2,col=mycol3, main="gene specific", ylab="percentage")
+barplot(t(isoform.specific), las=2,col=mycol3, main="isoform specific", ylab="percentage")
+legend("topright", inset=c(-0.2,0), legend=c(biotypes, "other"), fill = mycol3, bty="n")
+dev.off()
+
+
+mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")[c(1, 4, 2)]
+pdf("result/auc_recomputed_ccle_gdsc/biomarkers_specificity_biotypes2.pdf", width=21, height=10)
+par(mfrow=c(2,3))
+par(mar=c(7.1, 4.1, 4.1, 10.1), xpd=TRUE)
+biotypes <- c("protein_coding", "antisense", "processed_transcript", "lincRNA", "pseudogene", "other")
+rr <- list()
+for(i in 1:length(biotypes)) {
+ rr[[i]] <- matrix(0, nrow=length(all.biomarkers), ncol=3, dimnames=list(names(all.biomarkers), c("isoform.specific", "common", "gene.specific")))
+}
+for(drug in names(all.biomarkers)){
+  if(all(!is.na(all.biomarkers[[drug]]$specificity))){
+    xx <- table(all.biomarkers[[drug]]$specificity, all.biomarkers[[drug]]$biotype)
+    for(i in 1:length(biotypes)) {
+      yy <- grep(biotypes[i], colnames(xx))
+      if(length(yy) > 0) {
+        mm <- apply(xx[ , yy, drop=FALSE], 1, sum)
+        rr[[i]][drug, intersect(colnames(rr[[i]]), names(mm))] <- mm[intersect(colnames(rr[[i]]), names(mm))]/sum(mm)
+        xx <- xx[ ,-yy, drop=FALSE]
+      }else if (biotypes[i] == "other"){
+        mm <- apply(xx, 1, sum)
+        rr[[i]][drug, intersect(colnames(rr[[i]]), names(mm))] <- mm[intersect(colnames(rr[[i]]), names(mm))]/sum(mm)
+        xx <- xx[ , -yy, drop=FALSE]
+      }
+    }
+  }
+}
+
+for(i in 1:length(biotypes)) {
+    barplot(t(rr[[i]]), las=2,col=mycol, main=biotypes[i], ylab="percentage")
+}
+legend("topright", inset=c(-0.2,0), legend=colnames(rr[[1]]), fill=mycol, bty="n")
+dev.off()
 

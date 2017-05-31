@@ -24,14 +24,14 @@ fnOrderDrugs<- function(data,filename, ylab, main){
   return(list(order = data.order,ordered = data.ordered))
 }
 mystacked.barplot.simple <- function(Filename, data, main.label, cex=1.3){
-  mycol <- c(RColorBrewer::brewer.pal(n=9, name="Set1"), RColorBrewer::brewer.pal(n=5, name="Set3"), "black")
+  mycol <- c(RColorBrewer::brewer.pal(n=9, name="Set1"), RColorBrewer::brewer.pal(n=5, name="Set3"), "black")[c(1, 4, 2, 3, 5:15)]
   
   C = mycol[1:nrow(data)]#c(mycol[1],mycol[4],mycol[2])
   #C = c("purple","blue","red")
   
   pdf(file = Filename, height=9, width=14)
   #par(mar=c(8,5,2,2))
-  par(mar=c(5.1, 4.1, 4.1, 12.1), xpd=TRUE)
+  par(mar=c(6.1, 4.1, 4.1, 12.1), xpd=TRUE)
   yr = c(0, 100)
   # mp <- barplot(data, col = C, ylim = yr, ylab = "Percentage", main = main.label,border=NA,axisnames = FALSE, space = 0.5)
   mp <- barplot(data, col = C, ylim = yr, ylab = "Percentage",border=NA,axisnames = FALSE, space = 0.5)
@@ -48,7 +48,7 @@ mystacked.barplot.simple <- function(Filename, data, main.label, cex=1.3){
 }
 mybarplot <- function(Filename, data, barsNo, groupNo, group.labels, ylab.label, legend.lables, main.label, yaxis = c("Regular", "Log"), cex=1.1){
   #compare all
-  barplot.colors= RColorBrewer::brewer.pal(n=7, name="Set1")#c("steelblue3","palegreen3", "mediumpurple3","darkorange3", "indianred3")
+  barplot.colors= RColorBrewer::brewer.pal(n=7, name="Set1")[c(2 , 1, 3:7)]#c("steelblue3","palegreen3", "mediumpurple3","darkorange3", "indianred3")
   Sp <- c(.75,.25,.25,.25,.25)
   yr <- c(0, max(data,na.rm=TRUE)*1.02)
   idx <- NULL
@@ -476,9 +476,10 @@ fnPercentageBiomarkersType <- function(associations) {
     percentage.biomarkers.type["gene.specific",i] <- ifelse(is.na(round((type.table["gene.specific"]/sum(type.table))*100,digit=0)), 0, round((type.table["gene.specific"]/sum(type.table))*100,digit=0))
     percentage.biomarkers.type["isoform.specific",i] <- ifelse(is.na(round((type.table["isoform.specific"]/sum(type.table))*100,digit=0)), 0, round((type.table["isoform.specific"]/sum(type.table))*100,digit=0))
     percentage.biomarkers.type["common",i] <- ifelse(is.na(round((type.table["common"]/sum(type.table))*100,digit=0)), 0, round((type.table["common"]/sum(type.table))*100,digit=0))
-    
-    if(sum(percentage.biomarkers.type[,i]) < 100){percentage.biomarkers.type["common",i] <- percentage.biomarkers.type["common",i] + 100 - sum(percentage.biomarkers.type[,i])}
-    if(sum(percentage.biomarkers.type[,i]) > 100){percentage.biomarkers.type["common",i] <- 100 - sum(percentage.biomarkers.type[c(1,3),i])}
+    if(sum(percentage.biomarkers.type[,i]) != 0) {
+      if(sum(percentage.biomarkers.type[,i]) < 100){percentage.biomarkers.type["common",i] <- percentage.biomarkers.type["common",i] + 100 - sum(percentage.biomarkers.type[,i])}
+      if(sum(percentage.biomarkers.type[,i]) > 100){percentage.biomarkers.type["common",i] <- 100 - sum(percentage.biomarkers.type[c(1,3),i])}
+    }
   }
   return(percentage.biomarkers.type)
 }
@@ -580,3 +581,41 @@ fnWilcox <- function(model, signed) {
   return(list(comparison = W))
   
 }
+myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth"), transparency=0.10, smooth.pch=".", pch=16, minp=50, col=blues9[7], smooth.col=c("white", blues9), ...){
+  require(grDevices) || stop("Library grDevices is not available!")
+  method <- match.arg(method)
+  ccix <- complete.cases(x, y)
+  x <- x[ccix]
+  y <- y[ccix]
+  
+  if (sum(ccix) < minp) {
+    ## too few points, no transparency, no smoothing
+    if (sum(ccix) > 0) { rr <- plot(x=x, y=y, col=col, pch=pch, ...) } else { rr <- plot(x=x, y=y, col=col, pch=pch, ...) }
+  } else {
+    ## enough data points
+    switch(method,
+           "plain"={
+             pdf(file = Name, height=7, width=7)
+             plot(x=x, y=y, col=col, pch=pch, ...)
+             abline(0, 1, lty=2, col="gray")
+             legend("topright", legend=sprintf("r=%.1e", cor(as.numeric(x),as.numeric(y), method="spearman")), cex=1.5, bty="n")
+             dev.off()
+           },
+           "transparent"={
+             pdf(file = Name, height=7, width=7)
+             myrgb <- grDevices::col2rgb(col, alpha=FALSE) / 255
+             plot(x=x, y=y, pch=pch, col=rgb(red=myrgb[1], green=myrgb[2], blue=myrgb[3], alpha=transparency, maxColorValue=1), ...)
+             dev.off()
+           },
+           "smooth"={
+             pdf(file = Name, height=7, width=7)
+             smoothScatter(x=x, y=y, col="lightgray", colramp=colorRampPalette(smooth.col), pch=smooth.pch, ...)
+             #abline(0,max(y)/max(x),col="red")
+             abline(lm(y~x), col = "red")
+             #lines(x=c(0,0), y=c(max(x),max(y)), lty="solid", col="red")
+             dev.off()
+           }
+    )
+  }
+}
+
