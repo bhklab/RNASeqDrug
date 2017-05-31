@@ -1,10 +1,35 @@
-load("data/PSets/CCLE_isoforms.RData")
+load("data/PSets/CCLE_hs.RData")
 load("data/PSets/GDSC.RData")
-load("data/PSets/GRAY_isoforms.RData")
+load("data/PSets/GRAY_hs.RData")
 
 source("code/foo.R")
-mycol <- RColorBrewer::brewer.pal(n=7, name="Set1")
 
+##Supplementary Figure 4
+##rnaseq/microarray concordance
+if(file.exists(file.path(path.data, "rnaseq_microarray.RData"))){
+  load(file.path(path.data, "rnaseq_microarray.RData"))
+}else{
+  cells <- intersect(pData(CCLE@molecularProfiles$rnaseq)[,"cellid"], pData(CCLE@molecularProfiles$rna)[,"cellid"])
+  rnaseq.samples <- rownames(pData(CCLE@molecularProfiles$rnaseq))[match(cells, pData(CCLE@molecularProfiles$rnaseq)[,"cellid"])]
+  rna.samples <- rownames(pData(CCLE@molecularProfiles$rna))[match(cells, pData(CCLE@molecularProfiles$rna)[,"cellid"])]
+  
+  
+  features <- intersect(fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"], fData(CCLE@molecularProfiles$rna)[,"EnsemblGeneId"])
+  rnaseq.features <- rownames(fData(CCLE@molecularProfiles$rnaseq))[match(features, fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"])]
+  rna.features <- rownames(fData(CCLE@molecularProfiles$rna))[match(features, fData(CCLE@molecularProfiles$rna)[,"EnsemblGeneId"])]
+  ccle.rnaseq.microarray.cor <- cor(exprs(CCLE@molecularProfiles$rna)[rna.features, rna.samples], exprs(CCLE@molecularProfiles$rnaseq)[rnaseq.features, rnaseq.samples], use="pairwise.complete.obs", method="spearman")
+  save(ccle.rnaseq.microarray.cor, file=file.path(path.data, "rnaseq_microarray.RData"))
+}
+
+pdf(file.path(path.diagrams, "rnaseq_microarray.pdf"), height=7, width=7)
+par(mar=c(9,5,5,2))
+boxplot(cbind("Identical"=diag(ccle.rnaseq.microarray.cor), "Different"=c(ccle.rnaseq.microarray.cor[upper.tri(ccle.rnaseq.microarray.cor)], ccle.rnaseq.microarray.cor[lower.tri(ccle.rnaseq.microarray.cor)])), las = 2, col = "gray", cex.lab=1, cex.axis=1, pch=19, ylab="spearman correlation", outpch=20, outcex=0.5)
+dev.off()
+
+
+###supplementary Figure 5
+##intersection of cells/drugs between ccle, gdsc, gray
+mycol <- RColorBrewer::brewer.pal(n=7, name="Set1")
 library(VennDiagram)
 pdf(file.path(file.path(path.diagrams, "gray_ccle_gdsc_celllines.pdf")), height=4, width=4)
 venn.plot <-VennDiagram::draw.triple.venn(area1 = length(CCLE@cell$cellid), 
@@ -38,27 +63,7 @@ venn.plot <-VennDiagram::draw.triple.venn(area1 = length(rownames(CCLE@drug)),
 dev.off()
 
 ##Supplementary Figure 6
-if(file.exists(file.path(path.data, "rnaseq_microarray.RData"))){
-  load(file.path(path.data, "rnaseq_microarray.RData"))
-}else{
-  cells <- intersect(pData(CCLE@molecularProfiles$rnaseq)[,"cellid"], pData(CCLE@molecularProfiles$rna)[,"cellid"])
-  rnaseq.samples <- rownames(pData(CCLE@molecularProfiles$rnaseq))[match(cells, pData(CCLE@molecularProfiles$rnaseq)[,"cellid"])]
-  rna.samples <- rownames(pData(CCLE@molecularProfiles$rna))[match(cells, pData(CCLE@molecularProfiles$rna)[,"cellid"])]
-  
-  
-  features <- intersect(fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"], fData(CCLE@molecularProfiles$rna)[,"EnsemblGeneId"])
-  rnaseq.features <- rownames(fData(CCLE@molecularProfiles$rnaseq))[match(features, fData(CCLE@molecularProfiles$rnaseq)[,"EnsemblGeneId"])]
-  rna.features <- rownames(fData(CCLE@molecularProfiles$rna))[match(features, fData(CCLE@molecularProfiles$rna)[,"EnsemblGeneId"])]
-  ccle.rnaseq.microarray.cor <- cor(exprs(CCLE@molecularProfiles$rna)[rna.features, rna.samples], exprs(CCLE@molecularProfiles$rnaseq)[rnaseq.features, rnaseq.samples], use="pairwise.complete.obs", method="spearman")
-  save(ccle.rnaseq.microarray.cor, file=file.path(path.data, "rnaseq_microarray.RData"))
-}
-
-pdf(file.path(path.diagrams, "rnaseq_microarray.pdf"), height=7, width=7)
-par(mar=c(9,5,5,2))
-boxplot(cbind("Identical"=diag(ccle.rnaseq.microarray.cor), "Different"=c(ccle.rnaseq.microarray.cor[upper.tri(ccle.rnaseq.microarray.cor)], ccle.rnaseq.microarray.cor[lower.tri(ccle.rnaseq.microarray.cor)])), las = 2, col = "gray", cex.lab=1, cex.axis=1, pch=19, ylab="spearman correlation", outpch=20, outcex=0.5)
-dev.off()
-
-##Supplementary Figure 7
+##inconsistency of pharmacological profiles for sorafenib and critozenib between 3 studies
 gray.ccle.cells <- intersect(cellNames(GRAY), cellNames(CCLE))
 gray.gdsc.cells <- intersect(cellNames(GRAY), cellNames(GDSC))
 gdsc.ccle.cells <- intersect(cellNames(GDSC), cellNames(CCLE))
@@ -127,7 +132,6 @@ myScatterPlot(Name=file.path(path.diagrams, "ccle_gdsc_crizotinib.pdf"),
               ylim=c(0, 1),
               xlab="CCLE",
               ylab="GDSC")
-myScatterPlotle.path(path.diagrams, "microarray_rnaseq_cor.pdf"), method="transparent")
 
 ## doubling time
 xx <- read.csv(file.path(path.data, "GrowthCurve_dataCombined.csv"))
@@ -328,3 +332,17 @@ cat(sprintf("in vitro confidence interval difference pvalue: %s\n", fnConfidence
                                                                                                    x1=uhn.isoforms.models$complete[[best.isoform]]$model$`tt[, "exp"]`,
                                                                                                    x2=uhn.gene.model$complete[[1]]$model$`tt[, "exp"]`)), file=results, append=TRUE)
 
+##Supp table 2
+##validation rate of isformic biomarkers 
+drugs <- intersectList(drugNames(GRAY),
+                       drugNames(CCLE),
+                       drugNames(GDSC))
+drugs <- sort(drugs)
+xx <- matrix("-", ncol=4, nrow=length(drugs), dimnames=list(drugs, c("Compound", "Training", "Pre-validation", "Final validation")))
+xx[drugs, "Compound"] <- drugs
+xx[drugs, "Training"] <- sapply(all.biomarkers, function(x){length(which(x["type"]=="isoform" & x["breast"] > 0.55))})[drugs]
+load(file.path(path.diagrams, "Biomarkers_validated_breast_cindex_gray_pvalue.RData"), verbose=TRUE)
+xx[drugs, "Pre-validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[drugs]
+load(file.path(path.diagrams, "Biomarkers_uhn_status.RData"), verbose=TRUE)
+xx[names(biomarkers), "Final validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})
+xtable::print.xtable(xtable::xtable(xx, digits=0), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "validation_rate.tex"), append=FALSE)
