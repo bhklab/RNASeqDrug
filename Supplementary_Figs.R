@@ -332,7 +332,8 @@ cat(sprintf("in vitro confidence interval difference pvalue: %s\n", fnConfidence
                                                                                                    x1=uhn.isoforms.models$complete[[best.isoform]]$model$`tt[, "exp"]`,
                                                                                                    x2=uhn.gene.model$complete[[1]]$model$`tt[, "exp"]`)), file=results, append=TRUE)
 
-##Supp table 2
+#######
+##Supplementary table 2
 ##validation rate of isformic biomarkers 
 drugs <- intersectList(drugNames(GRAY),
                        drugNames(CCLE),
@@ -346,3 +347,4 @@ xx[drugs, "Pre-validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){le
 load(file.path(path.diagrams, "Biomarkers_uhn_status.RData"), verbose=TRUE)
 xx[names(biomarkers), "Final validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})
 xtable::print.xtable(xtable::xtable(xx, digits=0), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "validation_rate.tex"), append=FALSE)
+#######
