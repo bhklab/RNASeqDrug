@@ -5,30 +5,6 @@ load("data/PSets/gCSI_hs.RData")
 require(PharmacoGx)
 
 source("code/foo.R")
-path.result <- file.path("result")
-
-
-file.sensitivity <- "auc_recomputed_drug_association_ccle_gdsc.RData"
-training.type <- ifelse(regexpr("gdsc", file.sensitivity) < 1, "CCLE", "CCLE_GDSC")
-phenotype <- sensitivity.type <- paste0(unlist(strsplit(file.sensitivity, "_"))[1:2], collapse="_") 
-breast.specific <- ifelse(regexpr("breast", file.sensitivity) < 1, FALSE, TRUE)
-
-if(sensitivity.type == "slope_recomputed"){
-  if(training.type == "CCLE_GDSC")
-  {
-    ss<- unlist(strsplit(file.sensitivity, "_"))
-    res.weight <- as.numeric(ss[3]); sens.weight <- as.numeric(ss[4]);
-    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
-  }else
-  {
-    ss <- unlist(strsplit(file.sensitivity, "_"))
-    res.weight <- as.numeric(ss[4]); sens.weight <- as.numeric(ss[5]);
-    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))    
-  }
-}else{
-  ss <- unlist(strsplit(file.sensitivity, "_"))
-  path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
-}
 
 ##Supplementary Figure 4
 ##rnaseq/microarray concordance
@@ -53,8 +29,6 @@ boxplot(cbind("Identical"=diag(ccle.rnaseq.microarray.cor), "Different"=c(ccle.r
 dev.off()
 
 
-
-
 ###supplementary Figure 5
 ##intersection of cells/drugs between ccle, gdsc, gray
 mycol <- RColorBrewer::brewer.pal(n=7, name="Set1")
@@ -67,6 +41,21 @@ venn.plot <-VennDiagram::draw.triple.venn(area1 = length(CCLE@cell$cellid),
                                           n13 = length(intersect(CCLE@cell$cellid, GRAY@cell$cellid)),
                                           n23 = length(intersect(GDSC@cell$cellid, GRAY@cell$cellid)),
                                           n123 = length(PharmacoGx::intersectList(CCLE@cell$cellid, GDSC@cell$cellid, GRAY@cell$cellid)),
+                                          category = c("CCLE", "GDSC", "GRAY"),
+                                          col = mycol[1:3],
+                                          fill = mycol[1:3],
+                                          margin=0.10,
+                                          lty = "blank",cex = 1,cat.cex = 1,cat.col = c("black", "black","black"))
+dev.off()
+
+pdf(file.path(file.path(path.diagrams, "gray_ccle_gdsc_breast_celllines.pdf")), height=4, width=4)
+venn.plot <-VennDiagram::draw.triple.venn(area1 = length(CCLE@cell$cellid[which(CCLE@cell$tissueid=="breast")]), 
+                                          area2 = length(GDSC@cell$cellid[which(GDSC@cell$tissueid=="breast")]),
+                                          area3 = length(GRAY@cell$cellid),
+                                          n12 = length(intersect(CCLE@cell$cellid[which(CCLE@cell$tissueid=="breast")], GDSC@cell$cellid[which(GDSC@cell$tissueid=="breast")])),
+                                          n13 = length(intersect(CCLE@cell$cellid[which(CCLE@cell$tissueid=="breast")], GRAY@cell$cellid)),
+                                          n23 = length(intersect(GDSC@cell$cellid[which(GDSC@cell$tissueid=="breast")], GRAY@cell$cellid)),
+                                          n123 = length(PharmacoGx::intersectList(CCLE@cell$cellid[which(CCLE@cell$tissueid=="breast")], GDSC@cell$cellid[which(GDSC@cell$tissueid=="breast")], GRAY@cell$cellid)),
                                           category = c("CCLE", "GDSC", "GRAY"),
                                           col = mycol[1:3],
                                           fill = mycol[1:3],
@@ -360,17 +349,15 @@ cat(sprintf("in vitro confidence interval difference pvalue: %s\n", fnConfidence
                                                                                                    x1=uhn.isoforms.models$complete[[best.isoform]]$model$`tt[, "exp"]`,
                                                                                                    x2=uhn.gene.model$complete[[1]]$model$`tt[, "exp"]`)), file=results, append=TRUE)
 
-
-
 #######
 ##Supplementary table 2
 ##validation rate of isformic biomarkers 
 drugs <- unionList(intersectList(drugNames(GRAY),
-                       drugNames(CCLE),
-                       drugNames(GDSC)), 
+                                 drugNames(CCLE),
+                                 drugNames(GDSC)), 
                    intersectList(drugNames(gCSI),
-                       drugNames(CCLE),
-                       drugNames(GDSC)))
+                                 drugNames(CCLE),
+                                 drugNames(GDSC)))
 drugs <- sort(drugs)
 xx <- matrix("-", ncol=6, nrow=length(drugs), dimnames=list(drugs, c("Compound", "Training", "Pre-validation Pan-Cancer","Training Breast Specific", "Pre-validation Breast", "Final validation")))
 xx[drugs, "Compound"] <- drugs
@@ -386,3 +373,173 @@ load(file.path(path.diagrams, "Biomarkers_uhn_status.RData"), verbose=TRUE)
 xx[names(biomarkers), "Final validation"] <- sapply(biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})
 xtable::print.xtable(xtable::xtable(xx, digits=0, align=c("l","l|","l","l||","l","l","l")), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "validation_rate.tex"), append=FALSE)
 #######
+
+#######
+##Supplementary table 4
+##known biomarkers
+file.sensitivity.all.types <- "auc_recomputed_drug_association_mut_cnv.RData"
+file.sensitivity <- "auc_recomputed_drug_association.RData"
+load("data/training_ccle_gdsc_mut_cnv.RData")
+annot.ensembl.all.genes.mut <- annot.ensembl.all.genes
+annot.ensembl.all.isoforms.mut <- annot.ensembl.all.isoforms
+load("data/training_ccle_gdsc.RData")
+load(file.path(path.data, file.sensitivity.all.types), verbose=T)
+drug.association.mut <- drug.association
+drug.association.statistics.mut <- drug.association.statistics
+drug.association.best.isoforms.mut <- drug.association.best.isoforms
+load(file.path(path.data, file.sensitivity), verbose=T)
+knownBiomarkersCheck <-
+  function()
+  {
+    
+    known.biomarkers <- read.csv(file="data/known.biomarkers.csv", stringsAsFactors=FALSE, header=TRUE, check.names=FALSE, na.strings=c("", " ", "NA"))
+    known.biomarkers <- known.biomarkers[which(!is.na(known.biomarkers$type) & known.biomarkers$type != "fusion"),1:3]
+    #known.biomarkers <- known.biomarkers[which(known.biomarkers$type == "expression"),1:2]
+    known.biomarkers <- cbind(known.biomarkers,  "gene cindex"=NA, "gene pvalue"=NA, "isoform"=NA, "isoform cindex"=NA, "isoform pvalue"=NA, "null model cindex"=NA)
+    
+    for(i in 1:nrow(known.biomarkers)) {
+      feature <- rownames(annot.ensembl.all.genes)[which(annot.ensembl.all.genes$Symbol == known.biomarkers[i ,"gene"])]
+      if(known.biomarkers[i,"type"]== "expression" & length(feature) > 0){
+        known.biomarkers[i ,"gene cindex"] <- drug.association.statistics[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M2"]
+        known.biomarkers[i ,"gene pvalue"] <- drug.association[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]][1, "M2"]
+        #known.biomarkers[i ,"gene R2"] <- drug.association.statistics[["r.squared"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M2"]
+        
+        known.biomarkers[i ,"isoform"] <- drug.association.best.isoforms[[feature]][[known.biomarkers[i,"drug"]]]
+        
+        known.biomarkers[i ,"isoform cindex"] <- drug.association.statistics[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M3B"]
+        known.biomarkers[i ,"isoform pvalue"] <- drug.association[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]][1, "M3B"]
+        #known.biomarkers[i ,"isoform R2"] <- drug.association.statistics[["r.squared"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M3B"]
+        
+        known.biomarkers[i ,"null model cindex"] <- drug.association.statistics[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M0"]
+        
+        #xx <- rownames(ccle.drug.sensitivity)[which(!is.na(ccle.drug.sensitivity[,known.biomarkers[i,"drug"]]))]
+        #xx <- intersect(xx, rownames(ccle.genes.fpkm))
+        #known.biomarkers[i ,"mean expr"] <- mean(ccle.genes.fpkm[xx, feature], na.rm=TRUE)
+        #breast.cells <- rownames(ccle.cell.profiles)[which(ccle.cell.profiles == "breast")]
+        #breast.cells <- intersect(breast.cells, xx)
+        #known.biomarkers[i ,"breast expr"] <- mean(ccle.genes.fpkm[breast.cells, feature], na.rm=TRUE)
+        #known.biomarkers[i ,"mean isoform expr"] <- mean(ccle.isoforms.fpkm[xx, known.biomarkers[i ,"isoform"]], na.rm=TRUE)
+        #known.biomarkers[i ,"breast isoform expr"] <- mean(ccle.isoforms.fpkm[breast.cells, known.biomarkers[i ,"isoform"]], na.rm=TRUE)
+        
+      }else{
+        feature <- rownames(annot.ensembl.all.genes.mut)[which(annot.ensembl.all.genes.mut$Symbol == known.biomarkers[i ,"gene"])]
+        
+        known.biomarkers[i ,"null model cindex"] <- drug.association.statistics.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M0"]
+        if(known.biomarkers[i,"type"]== "expression"){
+          known.biomarkers[i ,"gene cindex"] <- drug.association.statistics.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M2"]
+          known.biomarkers[i ,"gene pvalue"] <- drug.association.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]][1, "M2"]
+          
+          known.biomarkers[i ,"isoform"] <- drug.association.best.isoforms.mut[[feature]][[known.biomarkers[i,"drug"]]]
+          
+          known.biomarkers[i ,"isoform cindex"] <- drug.association.statistics.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "M3B"]
+          known.biomarkers[i ,"isoform pvalue"] <- drug.association.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]][1, "M3B"]
+        }else if(known.biomarkers[i,"type"]== "mutation"){
+          known.biomarkers[i ,"gene cindex"] <- drug.association.statistics.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "MM"]
+          known.biomarkers[i ,"gene pvalue"] <- drug.association.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]][1, "MM"]
+        }else if(known.biomarkers[i,"type"]== "amplification"){
+          known.biomarkers[i ,"gene cindex"] <- drug.association.statistics.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]]["mean", "MC"]
+          known.biomarkers[i ,"gene pvalue"] <- drug.association.mut[["cindex"]][[feature]][[known.biomarkers[i,"drug"]]][1, "MC"]
+        }
+      }
+    }
+    known.biomarkers <- known.biomarkers[which(known.biomarkers$`gene cindex` != 0), ]
+    #colnames(known.biomarkers)[1:3] <- capitalize(colnames(known.biomarkers)[1:3])
+    xtable::print.xtable(xtable::xtable(known.biomarkers, digits=c(0, 0, 0, 0, 2, -1, 0, 2, -1, 2)), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "known_biomarkers.tex"), append=FALSE)
+    write.csv(known.biomarkers, file=file.path(path.diagrams, "known_biomarkers.csv"), row.names = F)
+  }
+
+knownBiomarkersCheck()
+#######
+#######
+##Supplementary table 5
+##Novel isoformic biomarkers
+load(file.path(path.diagrams, "isoform_specific/Biomarkers_uhn_status.RData"), verbose=TRUE)
+rr <- c("drug", "gene", "isoform", "Training cindex", "Training corrected pvalue", "Final validation cindex")
+xx <- as.data.frame(matrix(NA, ncol=length(rr), nrow=sum(sapply(biomarkers,dim)[1,]), dimnames=(list(unlist(sapply(biomarkers,function(x){x["biomarker.id"]})), rr))))
+i <- 0
+drugs <- sort(names(biomarkers))
+for(drug in drugs){
+  rr <- order(biomarkers[[drug]]$UHN.cindex, decreasing=T)
+  for(j in rr){
+    i <- i + 1
+    xx[i ,"drug"] <- drug
+    isoform <- biomarkers[[drug]][j,"biomarker.id"]
+    #feature <- biomarkers[[drug]][i, "gene.id"]
+    feature <- annot.ensembl.all.isoforms[which(annot.ensembl.all.isoforms$EnsemblTranscriptId == isoform), "EnsemblGeneId"]
+    
+    xx[i ,"gene"] <- annot.ensembl.all.genes[feature, "Symbol"]
+    #xx[i ,"gene cindex"] <- drug.association.statistics[["cindex"]][[feature]][[drug]]["mean", "M2"]
+    #xx[i ,"gene pvalue"] <- drug.association[["cindex"]][[feature]][[drug]][1, "M2"]
+    xx[i ,"isoform"] <- isoform
+    xx[i ,"Training cindex"] <- biomarkers[[drug]][j,"cindex"]
+    xx[i ,"Training corrected pvalue"] <- biomarkers[[drug]][j,"fdr"]
+    xx[i ,"Final validation cindex"] <- round(as.numeric(biomarkers[[drug]][j,"UHN.cindex"]), digits=2)
+    
+  }
+}
+#colnames(known.biomarkers)[1:3] <- capitalize(colnames(known.biomarkers)[1:3])
+xtable::print.xtable(xtable::xtable(xx, digits=c(0, 0, 0, 0, 2, -1, 2)), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "novel_biomarkers.tex"), append=FALSE)
+
+###
+###Supplementary figure 13
+###the heatmaps for the other drugs not included in uhn (not in Fig 4)
+load("data/PSets/UHN_hs.RData")
+source("code/foo.R")
+source("code/foo_PreValidation.R")
+source("code/foo_FinalValidation.R")
+mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")
+red <- mycol[1]  
+blue <- mycol[2]
+
+load(file.path(path.diagrams, "Biomarkers_validated_breast_cindex_gray_pvalue.RData"), verbose=TRUE)
+drugs <- setdiff(names(biomarkers), drugNames(UHN))
+for(drug in drugs) {
+  if(nrow(biomarkers[[drug]]) > 0){
+    vtt <- biomarkers[[drug]]
+    vtt <- vtt[which(vtt[,"type"] == "isoform"), , drop=F]
+    vtt <- vtt[which(vtt[, "isoforms.no"] > 1), , drop=FALSE]
+    vtt <- vtt[which(vtt[,"gray.specificity"] != "gene.specific"), , drop=F]
+    gray.specificity <- vtt[ ,"gray.specificity"]
+    xx <- fnFetchBiomarkers(top.significant.biomarkers=vtt, drug=drug, indices=1:nrow(vtt))
+    xx <- do.call(rbind, xx)
+    xx[,"short.label"] <- gsub(".ISO$","",xx[,"short.label"])
+    xx <- apply(xx, 1, function(x){x})
+    
+    rr <- fnPlotAUCoverCellLinesGray(drug=drug, tissue.type="all", biomarkers=xx, suffix="isoform.specific", gray.specificity=gray.specificity)#, biomarkers.toPlot)
+    if(all(!is.na(rr))){
+      biomarkers.order <- rr$hv$rowInd
+      fnPlotEffectSize(drug, biomarkers=xx, effect.size=effect.size, biomarkers.order) 
+      xx <- do.call(rbind, xx)
+      names(biomarkers.order) <- xx[biomarkers.order, "isoform.id"]
+    }
+    
+  }
+}
+###supp File 3
+##list of pre validated biomarkers in gray
+load(file.path(path.diagrams, "Biomarkers_validated_breast_cindex_gray_pvalue.RData"), verbose=TRUE)
+WriteXLS::WriteXLS("biomarkers", ExcelFileName=file.path(path.diagrams, "prevalidated_biomarkers_gray.xlsx"), row.names=TRUE)
+load(file.path(path.diagrams, "all.biomarkers.RData"))
+WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(path.diagrams, "predicted_biomarkers_training.xlsx"), row.names=TRUE)
+load(file.path(path.diagrams, "isoform_specific/Biomarkers_uhn_status.RData"), verbose=TRUE)
+WriteXLS::WriteXLS("biomarkers", ExcelFileName=file.path(path.diagrams, "validated_biomarkers_uhn.xlsx"), row.names=TRUE)
+load(file.path(path.diagrams, "validated.biomarkers.gCSI.RData"), verbose=TRUE)
+WriteXLS::WriteXLS("validated.biomarkers", ExcelFileName=file.path(path.diagrams, "validated_biomarkers_gCSI.xlsx"), row.names=TRUE)
+
+###
+###Check if the number of isoform specific pre validated biomarkers are greater than gene specific ones
+gg <- NULL
+ii <- NULL
+for(drug in names(biomarkers)) {
+  if(nrow(biomarkers[[drug]]) > 0){
+    xx <- table(biomarkers[[drug]]$gray.specificity)
+    gg <- c(gg, ifelse("gene.specific" %in% names(xx), xx["gene.specific"], 0))
+    ii <- c(ii, sum(xx)-ifelse("gene.specific" %in% names(xx), xx["gene.specific"], 0))
+  }
+}
+pp <- wilcox.test(ii, gg, paired=TRUE, alternative="greater")$p.value
+
+
+
+####pre validation rates
+load("result/auc_recomputed_ccle_gdsc/Biomarkers_uhn_status.RData")

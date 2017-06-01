@@ -29,7 +29,7 @@ effect.size <- "cindex" #c("r.squared", "cindex")
 adjustment.method <- "fdr"#c("bonferroni", "fdr")
 
 breast.specific <- ifelse(regexpr("breast", file.sensitivity) < 1, FALSE, TRUE)
-data.type <- ifelse(regexpr("mutation", file.sensitivity) >= 1, "all", "expression")
+data.type <- ifelse(regexpr("mut", file.sensitivity) >= 1, "all", "expression")
 
 source(file.path(path.code, "foo.R"))
 
@@ -46,7 +46,7 @@ if("gdsc.drug.sensitivity" %in% ls()) {
 
 if(data.type == "all") {
   Models <- c("M2", "M3B", "MM", "MC")
-  Models.names <- c("Genes", "Isoforms", "Mutations", "CNV")
+  Models.names <- c("Genes", "Isoforms", "Mutations", "Amlifications")
 }else {
   Models <- c("M2", "M3B")
   Models.names <- c("Genes", "Isoforms")
@@ -123,9 +123,9 @@ for(i in drugs) {
 #     FDR_List[i,j] <- ifelse(temp > 1, 1, temp)
 #   }
 # }
-
-if(file.exists("data/isoforms.no.per.gene.modified.version.GRCh38.87.RData")){
-  load("data/isoforms.no.per.gene.modified.version.GRCh38.87.RData", verbose=TRUE)
+myf <- "data/isoforms.no.per.gene.modified.version.GRCh38.87.RData"
+if(file.exists(myf)){
+  load(myf, verbose=TRUE)
 }else{
   load("data/ensembl.map.genes.isoforms.GRCh38.87.RData")
   fnNumber_Isoforms_of_Gene <- function(Gene_Map=ensembl.map.genes.isoforms, GeneId)
@@ -141,7 +141,7 @@ if(file.exists("data/isoforms.no.per.gene.modified.version.GRCh38.87.RData")){
     isoforms_No_List[i,] <- fnNumber_Isoforms_of_Gene(GeneId=as.character(rownames(isoforms_No_List)[i]))
   }
   isoforms_No_List <- data.frame(isoforms_No_List,stringsAsFactors=FALSE)
-  save(isoforms_No_List, file="data/isoforms.no.per.gene.modified.version.GRCh38.87.RData")  
+  save(isoforms_No_List, file=myf)  
 }
 isoforms_No_List <- isoforms_No_List[GeneList, , drop=FALSE]
 save(FDR_List, estimate_List, Pvalues.Numinals, statistics.matrix, best.isoforms.matrix, Min.Pvalues, isoforms_No_List, file= file.path(path.diagrams, "allGenes_association_matrices.RData"))
@@ -162,6 +162,10 @@ associations <- associations.all.drugs(model.rank="M3B", annot.ensembl.all.genes
 save(associations, file=file.path(path.diagrams, "associations.RData"))
 ##all.biomarkers would include all the significant biomarkers
 all.biomarkers <- fnTop.significant.biomarkers(associations, cut_off=0.01, BioNo="all", rank.type="pvalue.adj")
+##constraint the analyses to those predicted biomarkers with effect size greater than 0.55
+for(i in names(all.biomarkers)) {
+  all.biomarkers[[i]] <- all.biomarkers[[i]][which(all.biomarkers[[i]]$cindex > 0.55),]
+}
 save(all.biomarkers, file=file.path(path.diagrams, "all.biomarkers.original.RData"))
 
 if(!breast.specific)

@@ -134,7 +134,7 @@ if(!file.exists(myf)){
       
       xx <- apply(ccle.genes.fpkm, MARGIN=2, function(x){length(which(x > 0))})
       genes.expressed <- names(xx)[which(xx > exprs.cut.off)]
-      length(genes.expressed) #41748
+      length(genes.expressed) #46467
       
       tt <- apply(ccle.isoforms.fpkm, MARGIN=2, function(x){length(which(x > 0))})
       gg <- fData(CCLE@molecularProfiles$isoforms)[match(names(tt), fData(CCLE@molecularProfiles$isoforms)[, "EnsemblTranscriptId"]), "EnsemblGeneId"]

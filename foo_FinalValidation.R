@@ -65,7 +65,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
   #  color.palette  <- colorRampPalette(c(blue, "white", red, red))(length(palette.breaks) - 1)
   }
   exp.db.iso <- exp.db[,-ncol(exp.db), drop=FALSE]
-  colnames(exp.db.iso) <- ""
+  #colnames(exp.db.iso) <- rep("", ncol(exp.db.iso))
   xx <- which(apply(exp.db.iso, MARGIN=2, function(x){which(all(is.na(x)))}) == 1)
   if(length(xx) > 0) {exp.db.iso <- exp.db.iso[, -xx, drop=FALSE]}
   if(ncol(exp.db.iso) == 1) {
@@ -77,7 +77,9 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
     grid(nx = nrow(exp.db.iso), ny = ncol(exp.db.iso), lty = 1)
     axis(4,at = 0, labels=colnames(exp.db.iso), las=2, cex.axis = 2, tick = FALSE)
   }else {
-    pdf(file = file.path(path.diagrams, sprintf("%s_isofoms.pdf", file.name)), height=9, width=17) 
+    ff <- FALSE
+    if(ncol(exp.db.iso) < 4){ff <- TRUE}
+    pdf(file = file.path(path.diagrams, sprintf("%s_isofoms.pdf", file.name)), height=ifelse(ff, 3, 9), width=17) 
     par(oma=c(0,0,0,13))
     if(cluster){
         # hv <- gplots::heatmap.2(t(exp.db.iso), Colv=NA, Rowv=T, dendrogram="none", col=exp.col[,"col"], scale="row", trace="none", key=FALSE,
@@ -85,7 +87,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
         #                         #labRow=biomarkers.toPlot,
         #                         labCol=NA)
         hv <- gplots::heatmap.2(t(exp.db.iso), Colv=NA, Rowv=T, dendrogram="none", col=color.palette, breaks=palette.breaks, trace="none", key=FALSE,
-                                labRow=colnames(exp.db.iso), cexRow = 0.2 + 1.3/log10(ncol(exp.db.iso)),
+                                labRow=colnames(exp.db.iso), cexRow=ifelse(ff, 2, 0.2 + 1.3/log10(ncol(exp.db.iso))),
                                 #labRow=biomarkers.toPlot,
                                 labCol=NA)
     }else{
@@ -94,7 +96,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
         #                         #labRow=biomarkers.toPlot,
         #                         labCol=NA)
       hv <- gplots::heatmap.2(t(exp.db.iso), Colv=NA, Rowv=NA, dendrogram="none", col=color.palette, breaks=palette.breaks, trace="none", key=FALSE,
-                              labRow=colnames(exp.db.iso), cexRow = 0.2 + 1.3/log10(ncol(exp.db.iso)),
+                              labRow=colnames(exp.db.iso), ifelse(ff, 2, 0.2 + 1.3/log10(ncol(exp.db.iso))),
                               #labRow=biomarkers.toPlot,
                               labCol=NA)
     }
