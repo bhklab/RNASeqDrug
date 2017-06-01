@@ -1,3 +1,4 @@
+options(stringsAsFactors=FALSE)
 file.sensitivity <- "auc_recomputed_drug_association.RData"
 
 require(stringr) || stop("Library stringr is not available!")
@@ -16,12 +17,12 @@ require(Biobase) || stop("Library Biobase is not available!")
 require(magicaxis) || stop("Library magicaxis is not available!") #add minor tick marks to the plot
 require("np") || stop("Library np is not available!")
 
-
-options(stringsAsFactors=FALSE)
 path.data <- "data"
 path.code <- file.path("code")
 path.result <- file.path("result")
 
+effect.size.cut.off <- 0.55
+fdr.cut.off <- 0.01
 tissue <- "breast"
 model.method <- "glm"
 glm.family <- "gaussian" 
@@ -91,42 +92,34 @@ if(length(drug.association)==2) {
 
 Prototype <- drug.association[[1]][[1]]
 
-models.drugs.names <- expand.grid(drugs, Models)
-FDR_List <- matrix(NA, ncol=(length(drugs) * length(Models)), nrow=length(drug.association), dimnames=list(names(drug.association), paste(models.drugs.names[, 1], models.drugs.names[, 2], sep ="_")))
-estimate_List <- Pvalues.Numinals  <-  FDR_List
-models.plus.drugs.names <- expand.grid(drugs, c("M0", Models))
-
-statistics.matrix <- matrix(NA, ncol=(length(drugs) * (length(Models) + 1)), nrow=length(drug.association), dimnames=list(names(drug.association), paste(models.plus.drugs.names[, 1], models.plus.drugs.names[, 2], sep ="_")))
-
-best.isoforms.matrix <- matrix(NA, ncol=length(drugs) , nrow=length(drug.association))
-colnames(best.isoforms.matrix) <- drugs
-rownames(best.isoforms.matrix) <- names(drug.association)
-
-Min.Pvalues <- NULL
-for(i in drugs) {
-  statistics.matrix[,paste(i, "M0",sep ="_")] <- sapply(drug.association.statistics, function(x){ifelse(!is.null(x[[i]]["median", "M0"]), x[[i]]["median", "M0"], 0)})
-  for(j in 1:length(Models)) {
-    FDR_List[, paste(i, Models[j], sep ="_")] <- p.adjust(sapply(drug.association, function(x){ifelse(!is.null(x[[i]]["M0",Models[j]]), x[[i]]["M0", Models[j]], 1)}) ,method=adjustment.method)
-    Min.Pvalues[paste(i,Models[j],sep ="_")] <- min(sapply(drug.association, function(x){ifelse(!is.null(x[[i]]["M0", Models[j]]), x[[i]]["M0", Models[j]], 1)}))
-    estimate_List[,paste(i,Models[j],sep ="_")] <- sapply(drug.association, function(x){ifelse(!is.null(x[[i]][Models[j], "M0"]), x[[i]][Models[j], "M0"], 0)})
-    Pvalues.Numinals[,paste(i,Models[j],sep ="_")] <- sapply(drug.association, function(x){ifelse(!is.null(x[[i]]["M0",Models[j]]), x[[i]]["M0",Models[j]], 1)})
-    statistics.matrix[,paste(i,Models[j],sep ="_")] <- sapply(drug.association.statistics, function(x){ifelse(!is.null(x[[i]]["median", Models[j]]), x[[i]]["median", Models[j]], 0)})
-  }
-  best.isoforms.matrix[,i] <- sapply(drug.association.best.isoforms, function(x){ifelse(!is.null(x[[i]]), x[[i]], "")}) 
-}
-##multiplying adjusted pvalues by 2 !!!!?
-# for ( i in 1:nrow(FDR_List))
-# {
-#   for (j in (drugs_No + 1):ncol(FDR_List))
-#   {
-#     temp <- FDR_List[i,j] * 2
-#     FDR_List[i,j] <- ifelse(temp > 1, 1, temp)
-#   }
-# }
-myf <- "data/isoforms.no.per.gene.modified.version.GRCh38.87.RData"
-if(file.exists(myf)){
-  load(myf, verbose=TRUE)
+myf <- file.path(path.diagrams, "allGenes_association_matrices.RData")
+if(file.exists()){
+  load(myf)
 }else{
+  models.drugs.names <- expand.grid(drugs, Models)
+  FDR_List <- matrix(NA, ncol=(length(drugs) * length(Models)), nrow=length(drug.association), dimnames=list(names(drug.association), paste(models.drugs.names[, 1], models.drugs.names[, 2], sep ="_")))
+  estimate_List <- Pvalues.Numinals  <-  FDR_List
+  models.plus.drugs.names <- expand.grid(drugs, c("M0", Models))
+  
+  statistics.matrix <- matrix(NA, ncol=(length(drugs) * (length(Models) + 1)), nrow=length(drug.association), dimnames=list(names(drug.association), paste(models.plus.drugs.names[, 1], models.plus.drugs.names[, 2], sep ="_")))
+  
+  best.isoforms.matrix <- matrix(NA, ncol=length(drugs) , nrow=length(drug.association))
+  colnames(best.isoforms.matrix) <- drugs
+  rownames(best.isoforms.matrix) <- names(drug.association)
+  
+  Min.Pvalues <- NULL
+  for(i in drugs) {
+    statistics.matrix[,paste(i, "M0",sep ="_")] <- sapply(drug.association.statistics, function(x){ifelse(!is.null(x[[i]]["median", "M0"]), x[[i]]["median", "M0"], 0)})
+    for(j in 1:length(Models)) {
+      FDR_List[, paste(i, Models[j], sep ="_")] <- p.adjust(sapply(drug.association, function(x){ifelse(!is.null(x[[i]]["M0",Models[j]]), x[[i]]["M0", Models[j]], 1)}) ,method=adjustment.method)
+      Min.Pvalues[paste(i,Models[j],sep ="_")] <- min(sapply(drug.association, function(x){ifelse(!is.null(x[[i]]["M0", Models[j]]), x[[i]]["M0", Models[j]], 1)}))
+      estimate_List[,paste(i,Models[j],sep ="_")] <- sapply(drug.association, function(x){ifelse(!is.null(x[[i]][Models[j], "M0"]), x[[i]][Models[j], "M0"], 0)})
+      Pvalues.Numinals[,paste(i,Models[j],sep ="_")] <- sapply(drug.association, function(x){ifelse(!is.null(x[[i]]["M0",Models[j]]), x[[i]]["M0",Models[j]], 1)})
+      statistics.matrix[,paste(i,Models[j],sep ="_")] <- sapply(drug.association.statistics, function(x){ifelse(!is.null(x[[i]]["median", Models[j]]), x[[i]]["median", Models[j]], 0)})
+    }
+    best.isoforms.matrix[,i] <- sapply(drug.association.best.isoforms, function(x){ifelse(!is.null(x[[i]]), x[[i]], "")}) 
+  }
+  
   load("data/ensembl.map.genes.isoforms.GRCh38.87.RData")
   fnNumber_Isoforms_of_Gene <- function(Gene_Map=ensembl.map.genes.isoforms, GeneId)
   {
@@ -141,30 +134,31 @@ if(file.exists(myf)){
     isoforms_No_List[i,] <- fnNumber_Isoforms_of_Gene(GeneId=as.character(rownames(isoforms_No_List)[i]))
   }
   isoforms_No_List <- data.frame(isoforms_No_List,stringsAsFactors=FALSE)
-  save(isoforms_No_List, file=myf)  
+  #  save(isoforms_No_List, file=myf)  
+  #}
+  isoforms_No_List <- isoforms_No_List[GeneList, , drop=FALSE]
+  save(FDR_List, estimate_List, Pvalues.Numinals, statistics.matrix, best.isoforms.matrix, Min.Pvalues, isoforms_No_List, file=myf)
 }
-isoforms_No_List <- isoforms_No_List[GeneList, , drop=FALSE]
-save(FDR_List, estimate_List, Pvalues.Numinals, statistics.matrix, best.isoforms.matrix, Min.Pvalues, isoforms_No_List, file= file.path(path.diagrams, "allGenes_association_matrices.RData"))
 
 
 ##########Analyses
 
 source("code/foo.R")
 
-result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=0.01, effect.size_CutOff=0.55)
+result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=fdr.cut.off, effect.size_CutOff=effect.size_CutOff)
 write.csv(fnWilcox(result.effect.size, TRUE)$comparison, file=file.path(path.diagrams, "comparison_test_wilcox.csv"))
 barplot.models(model=result.effect.size, isoforms_No="all", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=1.2)
 barplot.models(model=result.effect.size, isoforms_No="1.isoform", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 barplot.models(model=result.effect.size, isoforms_No="n.isoforms", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
-barplot.models(model=result.effect.size, isoforms_No="all", sign="positive", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
-barplot.models(model=result.effect.size, isoforms_No="all", sign="negative", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
+#barplot.models(model=result.effect.size, isoforms_No="all", sign="positive", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
+#barplot.models(model=result.effect.size, isoforms_No="all", sign="negative", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 associations <- associations.all.drugs(model.rank="M3B", annot.ensembl.all.genes=annot.ensembl.all.genes)
 save(associations, file=file.path(path.diagrams, "associations.RData"))
 ##all.biomarkers would include all the significant biomarkers
-all.biomarkers <- fnTop.significant.biomarkers(associations, cut_off=0.01, BioNo="all", rank.type="pvalue.adj")
+all.biomarkers <- fnTop.significant.biomarkers(associations, cut_off=fdr.cut.off, BioNo="all", rank.type="pvalue.adj")
 ##constraint the analyses to those predicted biomarkers with effect size greater than 0.55
 for(i in names(all.biomarkers)) {
-  all.biomarkers[[i]] <- all.biomarkers[[i]][which(all.biomarkers[[i]]$cindex > 0.55),]
+  all.biomarkers[[i]] <- all.biomarkers[[i]][which(all.biomarkers[[i]]$cindex > effect.size_CutOff),]
 }
 save(all.biomarkers, file=file.path(path.diagrams, "all.biomarkers.original.RData"))
 
@@ -185,7 +179,7 @@ if(!breast.specific)
     }
   }
 }
-#all.biomarkers <- sapply(all.biomarkers, function(x){if("breast" %in% colnames(x)){x[order(x[, "breast"], na.last=T, decreasing=T),]}else{x}})
+all.biomarkers <- lapply(all.biomarkers, function(x){if("breast" %in% colnames(x)){x[order(x[, "breast"], na.last=T, decreasing=T),]}else{x}})
 save(all.biomarkers, file=file.path(path.diagrams, "all.biomarkers.RData"))
 #WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(path.diagrams, "all.biomarkers.xlsx"), row.names=TRUE)
 
