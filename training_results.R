@@ -147,7 +147,11 @@ source("code/foo.R")
 
 result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=fdr.cut.off, effect.size_CutOff=effect.size_CutOff)
 write.csv(fnWilcox(result.effect.size, TRUE)$comparison, file=file.path(path.diagrams, "comparison_test_wilcox.csv"))
+###Figure 2A
+### The number of significant predictive biomarkers identified in training
+### biomarkerd are plotted in seperate bars for isoforms and gene models
 barplot.models(model=result.effect.size, isoforms_No="all", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=1.2)
+###
 barplot.models(model=result.effect.size, isoforms_No="1.isoform", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 barplot.models(model=result.effect.size, isoforms_No="n.isoforms", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 #barplot.models(model=result.effect.size, isoforms_No="all", sign="positive", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
@@ -221,9 +225,49 @@ write.csv(TOP, file=file.path(path.diagrams, "TopOne.csv"))
 Check.KnownAssociations(associations)
 
 percentage.biomarkers.type <- fnPercentageBiomarkersType(all.biomarkers)
+###Figure 2B
+### The ratio of biomarkers according to their specificity in training 
 mystacked.barplot.simple(Filename=file.path(path.diagrams, "ProportionBiomarkersType.pdf"), data=percentage.biomarkers.type, main.label="Proportion of specificity of biomarkers", cex=1.2)
+###
 
-## annotation of differnet set of biomarkers based on their # of isoforms
+### Supplementary Figure 10
+## annotation of differnet set of biomarkers based on their biotaypes
+mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")[c(1, 4, 2)]
+pdf("result/auc_recomputed_ccle_gdsc/biomarkers_specificity_biotypes2.pdf", width=21, height=10)
+par(mfrow=c(2,3))
+par(mar=c(7.1, 4.1, 4.1, 10.1), xpd=TRUE)
+biotypes <- c("protein_coding", "antisense", "processed_transcript", "lincRNA", "pseudogene", "other")
+rr <- list()
+for(i in 1:length(biotypes)) {
+  rr[[i]] <- matrix(0, nrow=length(all.biomarkers), ncol=3, dimnames=list(names(all.biomarkers), c("isoform.specific", "common", "gene.specific")))
+}
+for(drug in names(all.biomarkers)){
+  if(all(!is.na(all.biomarkers[[drug]]$specificity))){
+    xx <- table(all.biomarkers[[drug]]$specificity, all.biomarkers[[drug]]$biotype)
+    for(i in 1:length(biotypes)) {
+      yy <- grep(biotypes[i], colnames(xx))
+      if(length(yy) > 0) {
+        mm <- apply(xx[ , yy, drop=FALSE], 1, sum)
+        rr[[i]][drug, intersect(colnames(rr[[i]]), names(mm))] <- mm[intersect(colnames(rr[[i]]), names(mm))]/sum(mm)
+        xx <- xx[ ,-yy, drop=FALSE]
+      }else if (biotypes[i] == "other"){
+        mm <- apply(xx, 1, sum)
+        rr[[i]][drug, intersect(colnames(rr[[i]]), names(mm))] <- mm[intersect(colnames(rr[[i]]), names(mm))]/sum(mm)
+        xx <- xx[ , -yy, drop=FALSE]
+      }
+    }
+  }
+}
+
+for(i in 1:length(biotypes)) {
+  barplot(t(rr[[i]]), las=2,col=mycol, main=biotypes[i], ylab="percentage")
+}
+legend("topright", inset=c(-0.2,0), legend=colnames(rr[[1]]), fill=mycol, bty="n")
+dev.off()
+###
+
+### Supplementary Figure 11
+## annotation of differnet set of biomarkers based on the number of alternative spliced products in their corresponding gene
 mycol <- RColorBrewer::brewer.pal(n=3, name="Set1")[c(2,1)]
 isoform.specific<- gene.specific<- common <- matrix(NA, nrow=length(all.biomarkers), ncol=2, dimnames=list(names(all.biomarkers), c("1 isoform", "n isoforms")))
 pdf("result/auc_recomputed_ccle_gdsc/biomarkers_specificity_isoform_no.pdf", width=21, height=5)
@@ -250,6 +294,8 @@ isoform.specific <- isoform.specific/apply(isoform.specific,MARGIN = 1, function
 barplot(t(isoform.specific), las=2,col=mycol[1:2], main="isoform specific", ylab="percentage")
 legend("topright", inset=c(-0.2,0), legend = colnames(isoform.specific), fill = mycol[1:2], bty="n")
 dev.off()
+###
+
 ## annotation of differnet set of biomarkers based on their biotaypes
 ##update all.biomarkers with gene/transcript biotypes
 for(drug in names(all.biomarkers)) {
@@ -289,37 +335,4 @@ barplot(t(isoform.specific), las=2,col=mycol3, main="isoform specific", ylab="pe
 legend("topright", inset=c(-0.2,0), legend=c(biotypes, "other"), fill = mycol3, bty="n")
 dev.off()
 
-
-mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")[c(1, 4, 2)]
-pdf("result/auc_recomputed_ccle_gdsc/biomarkers_specificity_biotypes2.pdf", width=21, height=10)
-par(mfrow=c(2,3))
-par(mar=c(7.1, 4.1, 4.1, 10.1), xpd=TRUE)
-biotypes <- c("protein_coding", "antisense", "processed_transcript", "lincRNA", "pseudogene", "other")
-rr <- list()
-for(i in 1:length(biotypes)) {
- rr[[i]] <- matrix(0, nrow=length(all.biomarkers), ncol=3, dimnames=list(names(all.biomarkers), c("isoform.specific", "common", "gene.specific")))
-}
-for(drug in names(all.biomarkers)){
-  if(all(!is.na(all.biomarkers[[drug]]$specificity))){
-    xx <- table(all.biomarkers[[drug]]$specificity, all.biomarkers[[drug]]$biotype)
-    for(i in 1:length(biotypes)) {
-      yy <- grep(biotypes[i], colnames(xx))
-      if(length(yy) > 0) {
-        mm <- apply(xx[ , yy, drop=FALSE], 1, sum)
-        rr[[i]][drug, intersect(colnames(rr[[i]]), names(mm))] <- mm[intersect(colnames(rr[[i]]), names(mm))]/sum(mm)
-        xx <- xx[ ,-yy, drop=FALSE]
-      }else if (biotypes[i] == "other"){
-        mm <- apply(xx, 1, sum)
-        rr[[i]][drug, intersect(colnames(rr[[i]]), names(mm))] <- mm[intersect(colnames(rr[[i]]), names(mm))]/sum(mm)
-        xx <- xx[ , -yy, drop=FALSE]
-      }
-    }
-  }
-}
-
-for(i in 1:length(biotypes)) {
-    barplot(t(rr[[i]]), las=2,col=mycol, main=biotypes[i], ylab="percentage")
-}
-legend("topright", inset=c(-0.2,0), legend=colnames(rr[[1]]), fill=mycol, bty="n")
-dev.off()
 

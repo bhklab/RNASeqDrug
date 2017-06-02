@@ -52,7 +52,11 @@ for(drug in drugs) {
   xx[,"short.label"] <- gsub(".ISO$","",xx[,"short.label"])
   xx <- apply(xx, 1, function(x){x})
   
+  ###Figure 4
+  ###heatmap of all pre validated biomarkers in GRAY for the drugs in common with UHN
+  ###row labels are colored according to their specificity in GRAY
   rr <- fnPlotAUCoverCellLinesGray(drug=drug, tissue.type="all", biomarkers=xx, suffix="all.specificity", gray.specificity=gray.specificity)#, biomarkers.toPlot)
+  ###
   vtt <- vtt[which(vtt[,"gray.specificity"] != "gene.specific"), , drop=F]
   gray.specificity <- vtt[ ,"gray.specificity"]
   rr <- fnPlotAUCoverCellLinesGray(drug=drug, tissue.type="all", biomarkers=xx, suffix="isorom.specific", gray.specificity=gray.specificity)#, biomarkers.toPlot)
@@ -141,14 +145,22 @@ for(drug in drugs) {
   message(paste(isoforms[[drug]], collapse="  "))
   expression <- cbind(gray.isoforms.fpkm[ , isoforms[[drug]], drop=FALSE], "gene"=gray.genes.fpkm[, gene])
   xx <- cor(expression, expression, use="pairwise", method="spearman")
+  ###Figure 5
+  ###Correlation of the biomarker to the other alternatively spliced products of the corresponding gene
   fnCor(drug, gene=symbol, xx, isoforms=isoforms[[drug]], best.isoform=best.isoform)
+  ###Expression of the biomarker along with all the other alternatively spliced products of the corresponding gene
   fnExp(drug, gene=symbol, exp=gray.isoforms.fpkm[ , isoforms[[drug]], drop=FALSE], best.isoform=best.isoform)
   exprs <- cbind(best.isoform=uhn.isoforms.fpkm[ , best.isoform, drop=FALSE], "gene"=uhn.genes.fpkm[, gene])
+  ###Heatmap of the expression of the biomarker in UHN cell lines
   fnPlotHeatMap(sensitivity=uhn.drug.sensitivity[ , drug], file.name=sprintf("%s_%s", drug, symbol), cluster=FALSE, expression=exprs, best.isoform=best.isoform)
+  ###Sensitivity of UHN cell lines to drug
   fnPlotSensitivity(sensitivity=uhn.drug.sensitivity[ , drug], file.name=sprintf("%s_%s", drug, symbol))
+  ####
   
   sensitivity <- uhn.drug.sensitivity[!is.na(uhn.drug.sensitivity[ , drug]) , drug]
   uhn.model <- lm(sensitivity  ~ exprs[names(sensitivity), best.isoform])
+  ###Supplementary 14
+  ###Predicted AUC values aginst the actual AUC values of the drug
   myScatterPlot(Name=file.path("result/scatter", sprintf("%s_%s_aac.pdf", drug, symbol)), 
                 x=predict(uhn.model), 
                 y=sensitivity, 
@@ -160,8 +172,12 @@ for(drug in drugs) {
                 xlab="predicted",
                 ylab="AAC",
                 main=best.isoform)
+  ###
   expression <- cbind(uhn.isoforms.fpkm[ , isoforms[[drug]], drop=FALSE], "gene"=uhn.genes.fpkm[, gene])
+  ###Supplementary 15
+  ###Expression of the biomarker along with all the other alternatively spliced products of the corresponding gene in UHN cells
   fnPlotHeatMap(sensitivity=sensitivity, file.name=sprintf("%s_%s", drug, symbol), cluster=FALSE, expression=expression, best.isoform=best.isoform)
+  ###
   colnames(expression)[ncol(expression)] <- annot.gene$EnsemblGeneId
 
   
