@@ -636,8 +636,8 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
   #par(mfrow=c(2,1))
   #library("gplots")
   #gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, col=exp.col[,"col"], scale="row", trace="none", dendrogram="none", )
-  coding.biotypes <- c("PRT", "AS", "prcTR", "pseudogene")
-  names(coding.biotypes) <- c("protein_coding", "antisense", "processed_transcript", "processed_pseudogene")
+  coding.biotypes <- c("PRT", "AS", "prcTR", "pseudogene", "ncRNA")
+  names(coding.biotypes) <- c("protein_coding", "antisense", "processed_transcript", "processed_pseudogene", "3prime_overlapping_ncRNA")
   #xx <- sapply(biomarkers, function(x){
   #  ifelse(x[["gtex"]] == "tumor.specific",
   #         sprintf("%s (%s) *", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]])), 
@@ -672,12 +672,13 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
     #par(mar=c(2, 2, 2, 8))
    
     if(drug=="paclitaxel"){par(oma=c(0,0,0,13))} else{ par(oma=c(0,0,0,10))}
+    if(drug=="Nutlin-3"){cr <- 1.3} else{cr <- ifelse(ff, 2, 0.2 + 1.3/log10(ncol(exp.db)))}
     # hv <- gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, dendrogram="none", col=exp.col[,"col"], scale="row", trace="none", key=FALSE,
     #                         labRow=xx, colRow=label.col, cexRow = 0.2 + 1.3/log10(ncol(exp.db)),
     #                         #labRow=biomarkers.toPlot,
     #                         labCol=NA)
     hv <- gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, dendrogram="none", col=color.palette, breaks=palette.breaks, trace="none", key=FALSE,
-                            labRow=xx, colRow=label.col, cexRow=ifelse(ff, 2, 0.2 + 1.3/log10(ncol(exp.db))),
+                            labRow=xx, colRow=label.col, cexRow=cr,
                             #labRow=biomarkers.toPlot,
                             labCol=NA)
     

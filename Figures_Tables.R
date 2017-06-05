@@ -484,14 +484,13 @@ for(drug in drugs) {
     xx[,"short.label"] <- gsub(".ISO$","",xx[,"short.label"])
     xx <- apply(xx, 1, function(x){x})
     
-    rr <- fnPlotAUCoverCellLinesGray(drug=drug, tissue.type="all", biomarkers=xx, suffix="isoform.specific", gray.specificity=gray.specificity)#, biomarkers.toPlot)
+    rr <- fnPlotAUCoverCellLinesGray(drug=drug, tissue.type="all", biomarkers=xx, suffix="all.specificity", gray.specificity=gray.specificity)#, biomarkers.toPlot)
     if(all(!is.na(rr))){
       biomarkers.order <- rr$hv$rowInd
       fnPlotEffectSize(drug, biomarkers=xx, effect.size=effect.size, biomarkers.order) 
-      xx <- do.call(rbind, xx)
-      names(biomarkers.order) <- xx[biomarkers.order, "isoform.id"]
+    }else if (nrow(vtt)==1){
+      fnPlotEffectSize(drug, biomarkers=xx, effect.size=effect.size, biomarkers.order=1) 
     }
-    
   }
 }
 ###
