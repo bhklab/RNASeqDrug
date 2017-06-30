@@ -644,6 +644,72 @@ fnValidatedPerCat <- function(biomarkers){
 }
 valid.per.cat <- data.frame(lapply(biomarkers, fnValidatedPerCat), check.names=FALSE)
 
+  pdf(paste0("supplementary_figure_cindex_2.pdf"), height=15, width=9, onefile=TRUE)
+
+for (drug in names(validated.biomarkers)){
+  par(mfrow=c(5,3))
+  tt <- validated.biomarkers[[drug]]
+  mostVarIsoform <- 0
+  mostVarGene <- 0
+  if(NCOL(gCSI.isoforms.fpkm[,tt$biomarker.id[tt$type=="isoform"]])>0){
+      mostVarIsoform <- sort(apply(gCSI.isoforms.fpkm[,tt$biomarker.id[tt$type=="isoform"]], 2, function(x) var(x)), decreasing=TRUE)[1]
+  }
+  if(NCOL(gCSI.genes.fpkm[,tt$gene.id[tt$type=="gene"]])){
+      mostVarGene <- sort(apply(gCSI.genes.fpkm[,tt$gene.id[tt$type=="gene"]], 2, function(x) var(x)), decreasing=TRUE)[1]
+  }
+  if(mostVarGene>mostVarIsoform){
+    top <- head(tt[tt$gene.id==names(mostVarGene),], n=1)
+  } else {
+    top <- head(tt[tt$transcript.id==names(mostVarIsoform),], n=1)
+  }
+
+
+
+  tissueTypes <- gCSI.tissuetype 
+  myTissues <- names(sort(table((as.character(tissueTypes[,1]))), decreasing=TRUE))[1:5]
+  for (kk in seq_along(myTissues)) {
+
+    for (jj in seq_len(3)){
+      dataset <- c("ccle", "gdsc", "gCSI")[jj]
+
+      if(dataset!="gCSI"){
+        tissueTypes <- ccle.tissuetype 
+        gene.data <- ccle.genes.fpkm
+        isoform.data <- ccle.isoforms.fpkm
+      } else {
+        tissueTypes <- gCSI.tissuetype 
+        gene.data <- gCSI.genes.fpkm
+        isoform.data <- gCSI.isoforms.fpkm
+      }
+
+
+
+      M0 <- fnCreateNullModel(drug=drug, assay=dataset)
+
+
+      mTitle <- paste0(c("CCLE", "GDSC", "gCSI")[jj], "-", myTissues[kk])
+      if(top[,"type"]=="gene"){
+        M2 <- fnCreateGeneModel(drug=drug, nullModel=M0, data=gene.data[ ,top[,"gene.id"]])
+        an <- sprintf("Cindex: %1.2g", compute.stat("cindex", M2$data$drug[M2$dataset$Tissue==myTissues[kk]],fitted(M2$model)[M2$dataset$Tissue==myTissues[kk]]))
+        print(an)
+        # tissueOnlyValues <- fitted(M2$model)-M2$model$coefficients[["Gene"]]*M2$data$Gene
+        myScatterPlot("", x=M2$data$drug[M2$dataset$Tissue==myTissues[kk]], y=fitted(M2$model)[M2$dataset$Tissue==myTissues[kk]], ylab="Predicted AAC", xlab="Actual AAC", cex=1.5, main=mTitle, annot = an, method="annotated")
+
+      } else if(top[,"type"]=="isoform"){
+        M3B <- fnCreateGeneModel(drug=drug, nullModel=M0, data=isoform.data[ ,top[,"transcript.id"]])
+        an <- sprintf("Cindex: %1.2g", compute.stat("cindex", M3B$data$drug[M3B$dataset$Tissue==myTissues[kk]],fitted(M3B$model)[M3B$dataset$Tissue==myTissues[kk]]))
+        print(an)
+        # tissueOnlyValues <- fitted(M3B$model)-M3B$model$coefficients[["Gene"]]*M3B$data$Gene
+        myScatterPlot("", x=M3B$data$drug[as.character(M3B$dataset$Tissue)==myTissues[kk]], y=fitted(M3B$model)[M3B$dataset$Tissue==myTissues[kk]], ylab="Predicted AAC", xlab="Actual AAC", cex=1.5, main=mTitle, annot = an, method="annotated")
+
+      }
+
+    }
+  }
+}
+  dev.off()
+
+
 
 pdf("supplementary_figure_cindex.pdf", height=15, width=9)
 par(mfrow=c(5,3))
@@ -671,13 +737,13 @@ for (drug in names(validated.biomarkers)){
       M2 <- fnCreateGeneModel(drug=drug, nullModel=M0, data=gene.data[ ,top[,"gene.id"]])
       an <- NA#sprintf("Cindex: %1.2g", compute.stat("cindex", M2$dataset[,"drug"],fitted(M2$model)))
       tissueOnlyValues <- fitted(M2$model)-M2$model$coefficients[["Gene"]]*M2$data$Gene
-      myScatterPlot("", x=abs(M2$model$coefficients[["Gene"]]*M2$data$Gene), y=abs(M2$data$drug - tissueOnlyValues), ylab="Actual Residual", xlab="Predicted Effect on AAC", cex=1.5, main=mTitle, annot=an, method="annotated")
+      myScatterPlot("", x=abs(M2$model$coefficients[["Gene"]]*M2$data$Gene), y=abs(M2$data$drug - tissueOnlyValues), ylab="Actual Residual", xlab="Predicted Effect on AAC", cex=1.5, main=mTitle, annot=an, method="plain")
 
     } else if(top[,"type"]=="isoform"){
       M3B <- fnCreateGeneModel(drug=drug, nullModel=M0, data=isoform.data[ ,top[,"transcript.id"]])
       an <- NA# sprintf("Cindex: %1.2g", compute.stat("cindex", M3B$dataset[,"drug"],fitted(M3B$model)))
       tissueOnlyValues <- fitted(M3B$model)-M3B$model$coefficients[["Gene"]]*M3B$data$Gene
-      myScatterPlot("", x=abs(M3B$model$coefficients[["Gene"]]*M3B$data$Gene), y=abs(M3B$data$drug - tissueOnlyValues), ylab="Actual Residual", xlab="Predicted Effect on AAC", cex=1.5, main=mTitle, annot=an, method="annotated")
+      myScatterPlot("", x=abs(M3B$model$coefficients[["Gene"]]*M3B$data$Gene), y=abs(M3B$data$drug - tissueOnlyValues), ylab="Actual Residual", xlab="Predicted Effect on AAC", cex=1.5, main=mTitle, annot=an, method="plain")
 
     }
 
@@ -927,5 +993,5 @@ summary(test)
 summary(test2)
 
 wilcox.test(test, test2, paired=TRUE, alternative="greater")
-
+sum(head(sort(table(ccle.tissuetype), decreasing=T))) / nrow(ccle.tissuetype)
 
