@@ -581,7 +581,7 @@ fnWilcox <- function(model, signed) {
   return(list(comparison = W))
   
 }
-myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth"), transparency=0.10, smooth.pch=".", pch=16, minp=50, col=blues9[7], smooth.col=c("white", blues9), ...){
+myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth"), legend.label, transparency=0.10, smooth.pch=".", pch=16, minp=50, col=blues9[7], smooth.col=c("white", blues9), ...){
   require(grDevices) || stop("Library grDevices is not available!")
   method <- match.arg(method)
   ccix <- complete.cases(x, y)
@@ -598,7 +598,11 @@ myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth")
              pdf(file = Name, height=7, width=7)
              plot(x=x, y=y, col=col, pch=pch, ...)
              abline(0, 1, lty=2, col="gray")
-             legend("topright", legend=sprintf("r=%.1e", cor(as.numeric(x),as.numeric(y), method="spearman")), cex=1.5, bty="n")
+             if(missing(legend.label)){
+               legend("topright", legend=sprintf("r=%.1e", cor(as.numeric(x),as.numeric(y), method="spearman")), cex=1.5, bty="n")
+             }else{
+               legend("topright", legend=legend.label, cex=1.5, bty="n")
+             }
              dev.off()
            },
            "transparent"={

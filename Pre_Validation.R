@@ -1,17 +1,4 @@
-#file.sensitivity <- "breast_new_drug_association.RData"
-#load(file.path(path.data, file.sensitivity), verbose=T)
-
-
-#both.drug.association <- both.tissue.drug.association
-#both.drug.association.statistics <- both.tissue.drug.association.statistics
-
-
-#path.diagrams <- file.path("result/slope0_weightes_1_1")
-
-# load(file.diagrams, "all.biomarkers.RData", verbose=T)
-#require(gdata) || stop("Library gdata is not available!")
-#myfn <- file.path(path.diagrams, "all.biomarkers.xlsx")
-#all.biomarkers <- gdata::read.xls(xls=myfn, sheet=12, stringsAsFactors=FALSE)
+options(stringsAsFactors=FALSE)
 
 require(PharmacoGx) || stop("Library PharmacoGx is not available!")
 require(Biobase) || stop("Library Biobase is not available!")
@@ -69,13 +56,17 @@ gray.isoforms.fpkm <- gray.isoforms.fpkm[gray.cells, , drop=FALSE]
 
 load(file.path(path.diagrams, "all.biomarkers.RData"))
 max.bio.no <- max(sapply(all.biomarkers, function(x){nrow(x)}))
-biomarkers <- fnValidation(top.significant.biomarkers=all.biomarkers, validation.cut.off=max.bio.no, validation.method=effect.size)
-save(biomarkers, file=file.path(path.diagrams, sprintf("Biomarkers_with_validation_status_breast_%s_gray_%s.RData", effect.size, "pvalue")))
+breast.biomarkers <- fnValidation(top.significant.biomarkers=all.biomarkers, validation.cut.off=max.bio.no, validation.method=effect.size)
+save(breast.biomarkers, file=file.path(path.diagrams, "breast.biomarkers.RData"))
+
+validated.biomarkers <- breast.biomarkers
+for(drug in drugs) {
+  validated.biomarkers[[drug]] <- validated.biomarkers[[drug]][which(validated.biomarkers[[drug]]$validation.stat == "validated"),]
+}
 
 breast <- all <- res.validated <- breast.validated.percent <- all.validated.percent <- validated.no <- NULL
 for(drug in drugs) {
-  xx <- which(biomarkers[[drug]][,"validation.stat"]=="validated")
-  temp <- biomarkers[[drug]][xx, , drop=FALSE]
+  temp <- validated.biomarkers[[drug]]
   if(length(xx) > 0) {
     xx <- paste(t(apply(temp, 1, function(x){sprintf("%s(%s)", x["symbol"], x["type"])}) ), collapse="_")
     res.validated <-  c(res.validated, xx)
@@ -88,9 +79,9 @@ for(drug in drugs) {
   all.validated.percent <- c(all.validated.percent, round(lv/nrow(all.biomarkers[[drug]]), digits=2))
   all <- c(all, length(which(rownames(all.biomarkers[[drug]]) != "NA")))
   
-  if(!is.null(biomarkers[[drug]])){
-    breast.validated.percent <- c(breast.validated.percent, round(lv/nrow(biomarkers[[drug]]), digits=2))
-    breast <- c(breast, nrow(biomarkers[[drug]]))
+  if(!is.null(breast.biomarkers[[drug]])){
+    breast.validated.percent <- c(breast.validated.percent, round(lv/nrow(breast.biomarkers[[drug]]), digits=2))
+    breast <- c(breast, nrow(breast.biomarkers[[drug]]))
   }else{
     breast.validated.percent <- c(breast.validated.percent, 0)
     breast <- c(breast, 0)
@@ -102,22 +93,20 @@ write.csv(cbind("drug"=drugs,
                 "biomarkers no"=all,
                 "ratio from all"=all.validated.percent,
                 "breast significant biomarkers no"=breast,
-                "ratio from breast biomarkers"=breast.validated.percent), file=file.path(path.diagrams, sprintf("validated_biomarkers_breast_%s_gray_%s.csv", effect.size, "pvalue")))
+                "ratio from breast biomarkers"=breast.validated.percent), file=file.path(path.diagrams, "gray_validation_rate.csv"))
 ##Stringtie estimated expressions are not comparable to those from cufflinks
 #if(!"GTex.BR" %in% ls()){
 #  load("data/GTex_BR.RData", verbose=T)
 #}
 #fnGtex(validation.method=effect.size)
 #fnGtex(all.biomarkers=biomarkers, validation.method=validation.method)
-for(drug in drugs) {
-  biomarkers[[drug]] <- biomarkers[[drug]][which(biomarkers[[drug]]$validation.stat == "validated"),]
-}
+
 source("code/foo_training.R")
 for(drug in drugs) {
-  if(nrow(biomarkers[[drug]]) > 0){
-    tt <- which(biomarkers[[drug]][,"transcript.id"]!= "")
-    xx <- biomarkers[[drug]][tt, ]
-    biomarkers[[drug]][which(biomarkers[[drug]][,"transcript.id"]== ""), "gray.specificity"] <- "gene.specific"
+  if(nrow(validated.biomarkers[[drug]]) > 0){
+    tt <- which(validated.biomarkers[[drug]][,"transcript.id"]!= "")
+    xx <- validated.biomarkers[[drug]][tt, ]
+    validated.biomarkers[[drug]][which(validated.biomarkers[[drug]][,"transcript.id"]== ""), "gray.specificity"] <- "gene.specific"
     if(!is.null(xx)){
       p.values.isoform <- p.values.gene <- NULL
       for(i in 1:nrow(xx)) {
@@ -126,33 +115,49 @@ for(drug in drugs) {
         M3B <- fnCreateGeneModel(drug=drug, nullModel=M0, data=gray.isoforms.fpkm[ ,xx[i, "transcript.id"]])
         results <- fnRunbootstrap(models=list("M2"=M2, "M3B"=M3B), effect.size=effect.size)
         if(length(results[["M2"]])>0 && length(results[["M3B"]])>0){
-          p.values.isoform <- c(p.values.isoform, wilcox.test(results[["M3B"]], results[["M2"]], paired=TRUE, alternative="greater")$p.value)
-          p.values.gene <- c(p.values.gene, wilcox.test(results[["M3B"]], results[["M2"]], paired=TRUE, alternative="less")$p.value)
+          pp <- wilcox.test(results[["M3B"]], results[["M2"]], paired=TRUE, alternative="greater")$p.value
+          p.values.isoform <- c(p.values.isoform, ifelse((pp * 2)<1, pp * 2, 1))
+          pp <- wilcox.test(results[["M3B"]], results[["M2"]], paired=TRUE, alternative="less")$p.value
+          p.values.gene <- c(p.values.gene, ifelse((pp * 2)<1, pp * 2, 1))
         }
         if(length(results[["M2"]])>0 && length(results[["M3B"]])==0){
-          p.values.isoform <- c(p.values.isoform, 0)
+          p.values.isoform <- c(p.values.isoform , 1)
           p.values.gene <- c(p.values.gene, 0.00001)
         }
         if(length(results[["M2"]])==0 && length(results[["M3B"]])>0){
           p.values.isoform <- c(p.values.isoform, 0.00001)
-          p.values.gene <- c(p.values.gene, 0)
+          p.values.gene <- c(p.values.gene, 1)
         }
         if(length(results[["M2"]])==0 && length(results[["M3B"]])==0){
-          p.values.isoform <- c(p.values.isoform, 0)
-          p.values.gene <- c(p.values.gene, 0)
+          p.values.isoform <- c(p.values.isoform, 1)
+          p.values.gene <- c(p.values.gene, 1)
         }
       }
       names(p.values.isoform) <- names(p.values.gene) <- rownames(xx)
-      biomarkers[[drug]][tt, "gray.specificity"] <- "common"
+      validated.biomarkers[[drug]][tt, "gray.specificity"] <- "common"
       for( i in names(p.values.isoform)){
         if(p.values.isoform[i] < 0.05) {
-          biomarkers[[drug]][i, "gray.specificity"] <- "isoform.specific"
+          validated.biomarkers[[drug]][i, "gray.specificity"] <- "isoform.specific"
         }else if(p.values.gene[i] < 0.05) {
-          biomarkers[[drug]][i, "gray.specificity"] <- "gene.specific"
+          validated.biomarkers[[drug]][i, "gray.specificity"] <- "gene.specific"
         }
+        validated.biomarkers[[drug]][i, "gray.isoform.specific.test.pvalue"] <- p.values.isoform[i]
+        validated.biomarkers[[drug]][i, "gray.gene.specific.test.pvalue"] <- p.values.gene[i]
       }
     }
   }
 }
-save(biomarkers, file=file.path(path.diagrams, sprintf("Biomarkers_validated_breast_%s_gray_%s.RData", effect.size, "pvalue")))
+
+save(validated.biomarkers, file=file.path(path.diagrams, "validated.biomarkers.gray.RData"))
+validated.biomarkers.fdr <- list()
+for(drug in names(validated.biomarkers)) {
+  validated.biomarkers.fdr[[drug]] <- validated.biomarkers[[drug]]
+  validated.biomarkers.fdr[[drug]][,"gray.fdr"] <- p.adjust(validated.biomarkers.fdr[[drug]][,"gray.pvalue"], method="fdr")
+}
+for(drug in names(validated.biomarkers.fdr)) {
+  message(sprintf("%s : %s", drug, length(which(validated.biomarkers.fdr[[drug]][,"gray.fdr"]< 0.05))))
+  validated.biomarkers.fdr[[drug]] <- validated.biomarkers.fdr[[drug]][which(validated.biomarkers.fdr[[drug]][,"gray.fdr"]< 0.05),]
+}
+sapply(validated.biomarkers, nrow)
+save(validated.biomarkers.fdr, file=file.path(path.diagrams, "validated.biomarkers.gray.fdr.RData"))
 

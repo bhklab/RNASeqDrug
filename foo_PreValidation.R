@@ -636,8 +636,8 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
   #par(mfrow=c(2,1))
   #library("gplots")
   #gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, col=exp.col[,"col"], scale="row", trace="none", dendrogram="none", )
-  coding.biotypes <- c("PRT", "AS", "prcTR", "pseudogene")
-  names(coding.biotypes) <- c("protein_coding", "antisense", "processed_transcript", "processed_pseudogene")
+  coding.biotypes <- c("PRT", "AS", "prcTR", "pseudogene", "ncRNA")
+  names(coding.biotypes) <- c("protein_coding", "antisense", "processed_transcript", "processed_pseudogene", "3prime_overlapping_ncRNA")
   #xx <- sapply(biomarkers, function(x){
   #  ifelse(x[["gtex"]] == "tumor.specific",
   #         sprintf("%s (%s) *", x[["short.label"]], ifelse(x[["biotype"]] %in% names(coding.biotypes), coding.biotypes[x[["biotype"]]], x[["biotype"]])), 
@@ -666,17 +666,19 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
     #axis(4,at=(0:(ncol(exp.db) - 1))/(ncol(exp.db) - 1), labels=sapply(biomarkers, function(x){ifelse(x[["gtex"]] == "tumor.specific", "*", NA)}, simplify=T), las=2, cex.axis=.8, tick=FALSE)
     
   }else {
-    
-    pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=ifelse(drug=="lapatinib", 3, 9) , width=17)
+    ff <- FALSE
+    if(length(xx) < 4){ff <- TRUE}
+    pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=ifelse(ff, 3, 9) , width=17)
     #par(mar=c(2, 2, 2, 8))
    
     if(drug=="paclitaxel"){par(oma=c(0,0,0,13))} else{ par(oma=c(0,0,0,10))}
+    if(drug=="Nutlin-3"){cr <- 1.3} else{cr <- ifelse(ff, 2, 0.2 + 1.3/log10(ncol(exp.db)))}
     # hv <- gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, dendrogram="none", col=exp.col[,"col"], scale="row", trace="none", key=FALSE,
     #                         labRow=xx, colRow=label.col, cexRow = 0.2 + 1.3/log10(ncol(exp.db)),
     #                         #labRow=biomarkers.toPlot,
     #                         labCol=NA)
     hv <- gplots::heatmap.2(t(exp.db), Colv=NA, Rowv=T, dendrogram="none", col=color.palette, breaks=palette.breaks, trace="none", key=FALSE,
-                            labRow=xx, colRow=label.col, cexRow=ifelse(drug=="lapatinib", 2, 0.2 + 1.3/log10(ncol(exp.db))),
+                            labRow=xx, colRow=label.col, cexRow=cr,
                             #labRow=biomarkers.toPlot,
                             labCol=NA)
     
