@@ -16,6 +16,9 @@ require(PharmacoGx) || stop("Library PharmacoGx is not available!")
 require(Biobase) || stop("Library Biobase is not available!")
 require(magicaxis) || stop("Library magicaxis is not available!") #add minor tick marks to the plot
 require("np") || stop("Library np is not available!")
+require(ggplot2) || stop("Library ggplot2 is not available!")
+require(gridExtra) || stop("Library gridExtra is not available!")
+require(easyGgplot2) || stop("Library easyGgplot2 is not available!")
 
 path.data <- "data"
 path.code <- file.path("code")
@@ -46,8 +49,8 @@ if("gdsc.drug.sensitivity" %in% ls()) {
 }
 
 if(data.type == "all") {
-  Models <- c("M2", "M3B", "MM", "MC")
-  Models.names <- c("Genes", "Isoforms", "Mutations", "Amlifications")
+  Models <- c("M3B", "M2", "MC", "MM")
+  Models.names <- c("Isoforms", "Genes", "Copy Number Variations", "Mutations")
 }else {
   Models <- c("M2", "M3B")
   Models.names <- c("Genes", "Isoforms")
@@ -93,7 +96,7 @@ if(length(drug.association)==2) {
 Prototype <- drug.association[[1]][[1]]
 
 myf <- file.path(path.diagrams, "allGenes_association_matrices.RData")
-if(file.exists()){
+if(file.exists(myf)){
   load(myf)
 }else{
   models.drugs.names <- expand.grid(drugs, Models)
@@ -143,14 +146,13 @@ if(file.exists()){
 
 ##########Analyses
 
-source("code/foo.R")
-
-result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=fdr.cut.off, effect.size_CutOff=effect.size_CutOff)
+result.effect.size <- fnComputeAssociateGenes.effect.size(FDR_CutOff=fdr.cut.off, effect.size_CutOff=effect.size.cut.off)
 write.csv(fnWilcox(result.effect.size, TRUE)$comparison, file=file.path(path.diagrams, "comparison_test_wilcox.csv"))
 ###Figure 2A
 ### The number of significant predictive biomarkers identified in training
 ### biomarkerd are plotted in seperate bars for isoforms and gene models
 barplot.models(model=result.effect.size, isoforms_No="all", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=1.2)
+cindexDistributions()
 ###
 barplot.models(model=result.effect.size, isoforms_No="1.isoform", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)
 barplot.models(model=result.effect.size, isoforms_No="n.isoforms", sign="all", prototype=Models, main.title=sprintf("%s  <  1%% \n %s > 0.55", adjustment.method, effect.size), yaxis="Log", breakpoint="Regular", cex=0.7)

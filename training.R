@@ -1,11 +1,11 @@
 args <- commandArgs(trailingOnly=TRUE)
 ##for test
-#args <- c("10841", "10842", "auc_recomputed", "1", "1", "TRUE", "ccle_gdsc", "glm", "gaussian", "all", "/mnt/work1/users/bhklab/Users/zhaleh/ccledrug/_results", "TRUE", "expression.cut.off")
+#args <- c("12304", "12304", "auc_recomputed", "1", "1", "TRUE", "ccle_gdsc", "glm", "gaussian", "all", "$HOME/training_results", "TRUE", "expression.cut.off")
 ##
 require("np") || stop("Library np is not available!")
 options(echo=TRUE) # if you want see commands in output file
 print(args)
-source("foo_training.R")
+source("code/foo_training.R")
 sensitivity.method <- as.character(args[3])# c("auc_published", "auc_recomputed", "slope_recomputed", "ic50_published", "ic50_recomputed")
 RNA_seq.normalize <- as.character(args[6])# c(TRUE,FALSE)
 training.method <- as.character(args[7]) # c("ccle_gdsc", "gray", "ccle", "gdsc", "gCSI")
@@ -20,17 +20,15 @@ subset.genes.method <- as.character(args[13]) #c("expression.cut.off", "biotype"
 statistical.method <- "bootstrap" #c("anova", "crossvalidation", "bootstrap")
 effect.size <- "r.squared & cindex" #c("adj.r.squared", "r.squared", "rmsd", "cindex","r.squared & cindex")
 
-myf <- "/mnt/work1/users/bhklab/Users/zhaleh/ccledrug/data/training_ccle_gdsc.RData"
-load("/mnt/work1/users/bhklab/Users/zhaleh/ensembl.map.genes.isoforms.GRCh38.87.RData", verbose=TRUE)
+myf <- "data/training_ccle_gdsc.RData"
+load("data/ensembl.map.genes.isoforms.GRCh38.87.RData", verbose=TRUE)
 if(!file.exists(myf)){
   require(PharmacoGx) || stop("Library PharmacoGx is not available!")
   require(Biobase) || stop("Library Biobase is not available!")
-  #load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE.CTRPv2.RData", verbose=TRUE)
-  #CCLE <- CCLE.CTRPv2
-  load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE_hs.RData", verbose=TRUE)
-  #load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC1000.RData", verbose=TRUE)
-  #GDSC <- GDSC1000
-  load("/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC.RData", verbose=TRUE)
+  downloadPSet("CCLE")
+  #load("data/PSets/CCLE_hs.RData", verbose=TRUE)
+  downloadPSet("GDSC")
+  load("data/PSets/GDSC.RData", verbose=TRUE)
   
   ###remove noisy cases and those with not matching snp profiles
   snp.outliers <- c(
@@ -60,11 +58,11 @@ if(!file.exists(myf)){
   match(snp.outliers, PharmacoGx::cellNames(CCLE))
   ccle.cells <- setdiff(PharmacoGx::cellNames(CCLE), snp.outliers)
   CCLE <- PharmacoGx::subsetTo(pSet=CCLE, cells=ccle.cells)
-  save(CCLE, file="/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/CCLE_hs_clarified.RData")
+  save(CCLE, file="data/PSets/CCLE_hs_clarified.RData")
   
   gdsc.cells <- setdiff(PharmacoGx::cellNames(GDSC), snp.outliers)
   GDSC <- PharmacoGx::subsetTo(pSet=GDSC, cells=gdsc.cells)
-  save(GDSC, file="/mnt/work1/users/bhklab/Projects/PharmacoGxTest/PSets/GDSC_clarified.RData")
+  save(GDSC, file="data/PSets/GDSC_clarified.RData")
   
   if(training.method== "ccle_gdsc") {
     ##Restrict analyses to common cells

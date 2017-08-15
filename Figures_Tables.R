@@ -242,7 +242,7 @@ knownBiomarkersCheck()
 ##Supplementary table 5
 ##Novel isoformic biomarkers
 load(file.path(path.diagrams, "validated.biomarkers.uhn.RData"), verbose=TRUE)
-rr <- c("drug", "gene", "isoform", "Training cindex", "Training corrected pvalue", "Final validation cindex")
+rr <- c("drug", "gene", "isoform", "Training cindex", "Breast cindex", "Training fdr", "Final validation cindex")
 xx <- as.data.frame(matrix(NA, ncol=length(rr), nrow=sum(sapply(final.validated.biomarkers,dim)[1,]), dimnames=(list(unlist(sapply(final.validated.biomarkers,function(x){x["biomarker.id"]})), rr))))
 i <- 0
 drugs <- sort(names(final.validated.biomarkers))
@@ -260,7 +260,7 @@ for(drug in drugs){
     #xx[i ,"gene pvalue"] <- drug.association[["cindex"]][[feature]][[drug]][1, "M2"]
     xx[i ,"isoform"] <- isoform
     xx[i ,"Training cindex"] <- final.validated.biomarkers[[drug]][j,"cindex"]
-    xx[i ,"Training corrected pvalue"] <- final.validated.biomarkers[[drug]][j,"fdr"]
+    xx[i ,"Training fdr"] <- final.validated.biomarkers[[drug]][j,"fdr"]
     xx[i ,"Final validation cindex"] <- round(as.numeric(final.validated.biomarkers[[drug]][j,"UHN.cindex"]), digits=2)
     
   }

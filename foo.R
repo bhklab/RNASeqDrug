@@ -48,7 +48,7 @@ mystacked.barplot.simple <- function(Filename, data, main.label, cex=1.3){
 }
 mybarplot <- function(Filename, data, barsNo, groupNo, group.labels, ylab.label, legend.lables, main.label, yaxis = c("Regular", "Log"), cex=1.1){
   #compare all
-  barplot.colors= RColorBrewer::brewer.pal(n=7, name="Set1")[c(2 , 1, 3:7)]#c("steelblue3","palegreen3", "mediumpurple3","darkorange3", "indianred3")
+  barplot.colors= RColorBrewer::brewer.pal(n=7, name="Set1")[c(1:2,4,3,5:7)]#c("steelblue3","palegreen3", "mediumpurple3","darkorange3", "indianred3")
   Sp <- c(.75,.25,.25,.25,.25)
   yr <- c(0, max(data,na.rm=TRUE)*1.02)
   idx <- NULL
@@ -91,7 +91,7 @@ mybarplot <- function(Filename, data, barsNo, groupNo, group.labels, ylab.label,
     #    mp <- barplot(temp, beside=TRUE, col=barplot.colors[1:barsNo], ylim=c(0, max(temp)*1.02), ylab=ylab.label, space=Sp, border=NA, axes=FALSE)
     mp <- barplot(temp, beside=TRUE, col=barplot.colors[1:barsNo], ylim=c(0, max(temp)*1.02), ylab=ylab.label, space=c(.15,.85), border=NA, axes=FALSE)
     
-    text(mp, par("usr")[3], labels=Groups.labels, srt=45, adj=c(1.1,1.1), xpd=TRUE, cex=1.1)
+    text(mp, par("usr")[3], labels=Groups.labels, srt=45, adj=c(1.1,1.1), xpd=TRUE, cex=cex)
     magicaxis::magaxis(side=2, tcl=-.3)
     legend("topright", inset=c(-.05,0), legend=legend.lables, fill=barplot.colors[1:barsNo], bty="n")
   }
@@ -622,4 +622,44 @@ myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth")
     )
   }
 }
+cindexDistributions <- function(){
+  mycol <- RColorBrewer::brewer.pal(n=7, name="Set1")[c(1:2,4,3)]
+  hist.plots <- list()
+  ll <- 0
+  for(drug in drugs[objOrderDrugs$order]){
+    drug.cindex <- list()
+    for(model in Models){
+      x <- statistics.matrix[, paste(drug, model, sep="_")]
+      y <- -log10(Pvalues.Numinals[, paste(drug, model, sep="_")])
+      fdr <- FDR_List[, paste(drug, model, sep="_")]
+      drug.cindex[[model]] <- x[which(x > 0.55 & fdr < 0.01)]
+    }
+    dd <- data.frame(Model=sapply(strsplit(names(unlist(drug.cindex)), split="\\."), function(x){x[[1]]}), cindex=unlist(drug.cindex))
+    for(model in Models){
+      if(!model %in% dd$Model){
+        dd <- rbind(dd, c("Model"=model, "cindex"=0.55))
+      }
+    }
+    dd$Model <- Models.names[dd$Model]
+    dd$cindex <- as.numeric(dd$cindex)
+    dd$Model <- factor(dd$Model, levels=Models.names)
+    ll <- ll + 1
+    hist.plots[[ll]] <- ggplot2.histogram(data=dd, xName='cindex', groupName='Model', binwidth=0.001,
+                                          faceting=TRUE, facetingVarNames="Model", facetingFont=c(0, 'plain', "black"), facetingRect=list(background="white", lineType=NULL, lineColor="white", lineSize=0),
+                                          groupColors=mycol, 
+                                          mainTitle=drug, 
+                                          xTickLabelFont=c(6, "plain", "black"), yTickLabelFont=c(6, "plain", "black"),
+                                          xtitle="Cindex", ytitle="Count",
+                                          xtitleFont=c(10,"bold", "black"), ytitleFont=c(10, "bold", "black"),
+                                          removePanelGrid=TRUE, removePanelBorder=TRUE, showLegend=FALSE, backgroundColor="white", 
+                                          xlim=c(0.55, max(dd$cindex) + 0.05)) +
+      theme(plot.title = element_text(hjust = 0.5, face="bold")) +
+      theme(panel.spacing = unit(1, "lines"))
+  }
+  pdf(file.path(path.diagrams, "hist_horizental_all_data_types.pdf"), width=12, height=12)
+  do.call(grid.arrange, c(hist.plots, list(ncol=4, heights=rep(3, 4), widths=rep(3, 4))))
+  dev.off()
+}
+
+
 
