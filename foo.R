@@ -623,6 +623,12 @@ myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth")
   }
 }
 cindexDistributions <- function(){
+  if(!require("easyGgplot2")){
+    install.packages("devtools")
+    library(devtools)
+    install_github("easyGgplot2", "kassambara")
+    library("easyGgplot2")
+  }
   mycol <- RColorBrewer::brewer.pal(n=7, name="Set1")[c(1:2,4,3)]
   hist.plots <- list()
   ll <- 0
