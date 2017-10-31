@@ -17,11 +17,8 @@ Citation
 To cite this work in publication, use
 
 <a href="https://www.nature.com/articles/s41467-017-01153-8">Gene isoforms as expression-based biomarkers predictive of drug response in vitro.</a>
-
 Safikhani Z, Smirnov P, Thu KL, Silvester J, El-Hachem N, Quevedo R, Lupien M, Mak TW, Cescon D, Haibe-Kains B.
-
 Nat Commun. 2017 Oct 24;8(1):1126. doi: 10.1038/s41467-017-01153-8.
-
 PMID: <a href="https://www.ncbi.nlm.nih.gov/pubmed/29066719">29066719</a>
 
 
