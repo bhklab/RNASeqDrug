@@ -1,17 +1,73 @@
-load("data/PSets/CCLE_hs.RData")
-load("data/PSets/GDSC.RData")
-load("data/PSets/GRAY_hs.RData")
-load("data/PSets/gCSI_hs.RData")
-load("data/PSets/UHN_hs.RData")
-require(PharmacoGx)
-source("code/foo.R")
+options(stringsAsFactors = FALSE)
+source("https://bioconductor.org/biocLite.R")
+if(!require("PharmacoGx")){biocLite("PharmacoGx");library(PharmacoGx)}
+if(!require("Biobase")){biocLite("Biobase");library(Biobase)}
+if(!require(calibrate)){install.packages("calibrate");library(calibrate)}
+if(!require(stringr)){install.packages("stringr");library(stringr)}
+if(!require(gdata)){install.packages("gdata");library(gdata)}
+if(!require(xtable)){install.packages("xtable");library(xtable)}
+if(!require(VennDiagram)){install.packages("VennDiagram");library(VennDiagram)}
+if(!require(Hmisc)){install.packages("viridisLite");install.packages("Hmisc");library(Hmisc)}
+
+args <- commandArgs(trailingOnly=TRUE)
+##for test
+#args <- c("auc_recomputed_ccle_gdsc")
+
+path.result <- "../results"
+path.data <- "../data"
+path.code <- "."
+path.diagrams <- file.path(path.result, as.character(args[1]))
+if (!file.exists(path.diagrams)){dir.create(file.path(path.diagrams))}
+file.sensitivity <- as.character(args[2]) #"auc_recomputed_drug_association.RData"
+file.sensitivity.all.types <- as.character(args[3]) #"auc_recomputed_drug_association_mut_cnv.RData"
+effect.size <- as.character(args[4])
+adjustment.method <- as.character(args[5])
+sensitivity.type <- phenotype <- as.character(args[6])
+RNA_seq.normalize <- as.character(args[7])
+
+source(file.path(path.code, "foo.R"))
+source(file.path(path.code, "foo_PreValidation.R"))
+source(file.path(path.code, "foo_FinalValidation.R"))
+
+load(file.path(path.data, "CCLE_hs.RData"))
+load(file.path(path.data, "GDSC.RData"))
+load(file.path(path.data, "GRAY_hs.RData"))
+load(file.path(path.data, "gCSI_hs.RData"))
+load(file.path(path.data, "UHN_hs.RData"))
+
+
+if(!exists("ccle.genes.fpkm")){
+  path.training.data <- file.path(path.data, as.character(args[8]))
+  load(path.training.data, verbose=TRUE)
+  if("gdsc.drug.sensitivity" %in% ls()) {
+    training.type <-"CCLE_GDSC"
+  } else {
+    training.type <-"CCLE"
+  }
+  genes <- colnames(ccle.genes.fpkm)
+  isoforms <- colnames(ccle.isoforms.fpkm)
+  gray.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GRAY, sensitivity.measure=sensitivity.type))
+  drugs <- intersect(colnames(ccle.drug.sensitivity), colnames(gray.drug.sensitivity))
+  gray.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=GRAY, mDataType="rnaseq", features=genes, fill.missing=FALSE)))
+  gray.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=GRAY, mDataType="isoforms", features=isoforms, fill.missing=FALSE)))
+  gray.isoforms.fpkm[which(is.na(gray.isoforms.fpkm))] <- 0
+  if(RNA_seq.normalize == TRUE) {
+   gray.genes.fpkm <- log2(gray.genes.fpkm + 1)
+   gray.isoforms.fpkm <- log2(gray.isoforms.fpkm + 1)
+  }
+  gray.cells <- intersect(rownames(gray.drug.sensitivity), rownames(gray.genes.fpkm))
+  gray.drug.sensitivity <- gray.drug.sensitivity[gray.cells, , drop=FALSE]
+  gray.genes.fpkm <- gray.genes.fpkm[gray.cells, , drop=FALSE]
+  gray.isoforms.fpkm <- gray.isoforms.fpkm[gray.cells, , drop=FALSE]
+}
 
 ###Figures
-###Figure 1 is created in isoforms.graffle
-###Figure 2 is created in training_results.R
-###Figure 3 ??
-###Figure 4 is created in Final_Validation.R
+###Figure 1 is created in omni graffle
+###Figure 2 is created in training_results.R with auc_recomputed_drug_association.RData as input
+###Figure 3 A and B is created in training_results.R with auc_recomputed_drug_association_mut_cnv.RData as input
+###Figure 4 is created in Pre_validation_gCSI.R
 ###Figure 5 is created in Final_Validation.R
+###Figure 6 is created in Final_Validation.R
 ###
 
 ##Supplementary Tables
@@ -36,15 +92,15 @@ drugs <- unionList(intersectList(drugNames(GRAY),
 drugs <- sort(drugs)
 xx <- matrix("-", ncol=6, nrow=length(drugs), dimnames=list(drugs, c("Compound", "Training", "Pre-validation Pan-Cancer","Training Breast Specific", "Pre-validation Breast", "Final validation")))
 xx[drugs, "Compound"] <- drugs
-load(file.path(path.diagrams, "all.biomarkers.RData"), verbose=TRUE)
+load(file.path(path.data, "all.biomarkers.RData"), verbose=TRUE)
 xx[drugs, "Training"] <- sapply(all.biomarkers, function(x){length(which(x["type"]=="isoform"))})[drugs]
-load(file.path(path.diagrams, "validated.biomarkers.gCSI.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.gCSI.RData"), verbose=TRUE)
 xx[intersect(drugs, names(validated.biomarkers)), "Pre-validation Pan-Cancer"] <- sapply(validated.biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[intersect(drugs, names(validated.biomarkers))]
-load(file.path(path.diagrams, "breast.biomarkers.RData"), verbose=TRUE)
+load(file.path(path.data, "breast.biomarkers.RData"), verbose=TRUE)
 xx[intersect(drugs, names(breast.biomarkers)), "Training Breast Specific"] <- sapply(breast.biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[intersect(drugs, names(breast.biomarkers))]
-load(file.path(path.diagrams, "validated.biomarkers.gray.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.gray.RData"), verbose=TRUE)
 xx[intersect(drugs, names(validated.biomarkers)), "Pre-validation Breast"] <- sapply(validated.biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})[intersect(drugs, names(validated.biomarkers))]
-load(file.path(path.diagrams, "validated.biomarkers.uhn.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.uhn.RData"), verbose=TRUE)
 xx[intersect(drugs, names(final.validated.biomarkers)), "Final validation"] <- sapply(final.validated.biomarkers, function(x){if(nrow(x) > 0){length(which(x["type"]=="isoform"))}else{0}})
 xtable::print.xtable(xtable::xtable(xx, digits=0, align=c("l","l|","l","l||","l","l","l")), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "validation_rate.tex"), append=FALSE)
 ###
@@ -166,12 +222,10 @@ xtable::print.xtable(xtable::xtable(dd, digits=0), include.rownames=FALSE, float
 ###
 ##Supplementary table 4
 ##known biomarkers
-file.sensitivity.all.types <- "auc_recomputed_drug_association_mut_cnv.RData"
-file.sensitivity <- "auc_recomputed_drug_association.RData"
-load("data/training_ccle_gdsc_mut_cnv.RData")
+load(file.path(path.data, "training_ccle_gdsc_mut_cnv.RData"))
 annot.ensembl.all.genes.mut <- annot.ensembl.all.genes
 annot.ensembl.all.isoforms.mut <- annot.ensembl.all.isoforms
-load("data/training_ccle_gdsc.RData")
+load(file.path(path.data, "training_ccle_gdsc.RData"))
 load(file.path(path.data, file.sensitivity.all.types), verbose=T)
 drug.association.mut <- drug.association
 drug.association.statistics.mut <- drug.association.statistics
@@ -180,7 +234,7 @@ load(file.path(path.data, file.sensitivity), verbose=T)
 knownBiomarkersCheck <-
   function()
   {
-    known.biomarkers <- read.csv(file="data/known.biomarkers.csv", stringsAsFactors=FALSE, header=TRUE, check.names=FALSE, na.strings=c("", " ", "NA"))
+    known.biomarkers <- read.csv(file=file.path(path.data, "known.biomarkers.csv"), stringsAsFactors=FALSE, header=TRUE, check.names=FALSE, na.strings=c("", " ", "NA"))
     known.biomarkers <- known.biomarkers[which(!is.na(known.biomarkers$type) & known.biomarkers$type != "fusion"),1:3]
     #known.biomarkers <- known.biomarkers[which(known.biomarkers$type == "expression"),1:2]
     known.biomarkers <- cbind(known.biomarkers,  "gene cindex"=NA, "gene pvalue"=NA, "isoform"=NA, "isoform cindex"=NA, "isoform pvalue"=NA, "null model cindex"=NA)
@@ -241,7 +295,7 @@ knownBiomarkersCheck()
 #######
 ##Supplementary table 5
 ##Novel isoformic biomarkers
-load(file.path(path.diagrams, "validated.biomarkers.uhn.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.uhn.RData"), verbose=TRUE)
 rr <- c("drug", "gene", "isoform", "Training cindex", "Breast cindex", "Training fdr", "Final validation cindex")
 xx <- as.data.frame(matrix(NA, ncol=length(rr), nrow=sum(sapply(final.validated.biomarkers,dim)[1,]), dimnames=(list(unlist(sapply(final.validated.biomarkers,function(x){x["biomarker.id"]})), rr))))
 i <- 0
@@ -265,7 +319,7 @@ for(drug in drugs){
     
   }
 }
-xtable::print.xtable(xtable::xtable(xx, digits=c(0, 0, 0, 0, 2, -1, 2)), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "novel_biomarkers.tex"), append=FALSE)
+xtable::print.xtable(xtable::xtable(xx, digits=c(0, 0, 0, 0, 2, 2, -1, 2)), include.rownames=FALSE, floating=FALSE, table.placement="!h", file=file.path(path.diagrams, "novel_biomarkers.tex"), append=FALSE)
 ###
 
 ##Supplementary Figures
@@ -464,14 +518,11 @@ myScatterPlot(Name=file.path(path.diagrams, "ccle_gdsc_crizotinib.pdf"),
 
 ###Supplementary Figure 13
 ###the heatmaps for the other drugs not included in uhn (not in Fig 4)
-source("code/foo.R")
-source("code/foo_PreValidation.R")
-source("code/foo_FinalValidation.R")
 mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")
 red <- mycol[1]  
 blue <- mycol[2]
 
-load(file.path(path.diagrams, "validated.biomarkers.gray.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.gray.RData"), verbose=TRUE)
 drugs <- setdiff(names(validated.biomarkers), drugNames(UHN))
 for(drug in drugs) {
   if(nrow(validated.biomarkers[[drug]]) > 0){
@@ -534,21 +585,21 @@ write.csv(dd, file=file.path(path.diagrams, "drugs.csv"), na="", row.names=FALSE
 ###
 ###supplementary File 3
 ##list of predicted biomarkers in training phase
-load(file.path(path.diagrams, "all.biomarkers.RData"))
+load(file.path(path.data, "all.biomarkers.RData"))
 WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(path.diagrams, "predicted_biomarkers_training.xlsx"), row.names=TRUE)
 ###
 ###supplementary File 4
 ##list of validated biomarkers in gCSI
-load(file.path(path.diagrams, "validated.biomarkers.gCSI.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.gCSI.RData"), verbose=TRUE)
 WriteXLS::WriteXLS("validated.biomarkers", ExcelFileName=file.path(path.diagrams, "validated_biomarkers_gCSI.xlsx"), row.names=TRUE)
 ###
-###supplementary File 4
+###supplementary File 5
 ##list of pre-validated breast biomarkers in GRAY
-load(file.path(path.diagrams, "validated.biomarkers.gray.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.gray.RData"), verbose=TRUE)
 WriteXLS::WriteXLS("validated.biomarkers", ExcelFileName=file.path(path.diagrams, "prevalidated_biomarkers_gray.xlsx"), row.names=TRUE)
 ###
-###supplementary File 4
+###supplementary File 6
 ##list of validated breast biomarkers in UHN
-load(file.path(path.diagrams, "validated.biomarkers.uhn.RData"), verbose=TRUE)
-WriteXLS::WriteXLS("biomarkers", ExcelFileName=file.path(path.diagrams, "validated_biomarkers_uhn.xlsx"), row.names=TRUE)
+load(file.path(path.data, "validated.biomarkers.uhn.RData"), verbose=TRUE)
+WriteXLS::WriteXLS("final.validated.biomarkers", ExcelFileName=file.path(path.diagrams, "validated_biomarkers_uhn.xlsx"), row.names=TRUE)
 ###

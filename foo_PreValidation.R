@@ -1,5 +1,5 @@
 require(gplots) || stop("Library gplots is not available!")
-fnValidation <- function(top.significant.biomarkers, validation.cut.off, validation.method=c(effect.size, "pvalue"), effect.size.cut.off=0.55, pvalue.cut.off=0.05, plot.create=FALSE, common.cells=FALSE) {
+fnValidation <- function(top.significant.biomarkers, validation.cut.off, validation.method=c(effect.size, "pvalue"), effect.size.cut.off=0.55, pvalue.cut.off=0.05, plot.create=FALSE, common.cells=FALSE, plot.path=path.diagrams) {
   rr <- list()
   for(drug in drugs) {
     if(!all(is.na(top.significant.biomarkers[[drug]]))) {
@@ -21,7 +21,7 @@ fnValidation <- function(top.significant.biomarkers, validation.cut.off, validat
       rr[[drug]] <- top.significant.biomarkers.drug
       
       if(plot.create) {
-        pdf(file=file.path(path.diagrams, sprintf("%s.pdf", drug)), height=4 * (plots.no + 1), width=16)
+        pdf(file=file.path(plot.path, sprintf("%s.pdf", drug)), height=4 * (plots.no + 1), width=16)
         par(mfrow=c((plots.no + 1), 4))
         
         if(training.type == "CCLE_GDSC") {
@@ -75,7 +75,7 @@ fnValidation <- function(top.significant.biomarkers, validation.cut.off, validat
   }
   return(rr)
 }
-fnValidateWithGray <- function(biomarker, cells=c("common","all"), my.xlim, my.ylim, color, drug, plot.create=FALSE, validation.method=c(effect.size, "pvalue"), validation.cut.off, expression.cut.off=0.1) {
+fnValidateWithGray <- function(biomarker, cells=c("common","all"), my.xlim, my.ylim, color, drug, plot.create=FALSE, validation.method=c(effect.size, "pvalue"), validation.cut.off, expression.cut.off=0.1, plot.path=path.diagrams) {
   gray.sensitivity <- subset(gray.drug.sensitivity, !is.na(gray.drug.sensitivity[, drug]) , select=drug)
   intersected.celllines.gray <- intersect(rownames(gray.sensitivity), rownames(gray.genes.fpkm))
   if(cells=="common") {
@@ -149,7 +149,7 @@ fnDefineBiomarker <- function(gene.id, isoform.id, estimate, pvalue, effect.size
   }
   return(biomarker)
 }
-fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue")) {
+fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue"), plot.path=path.diagrams) {
   ccle.breast.cells <- rownames(ccle.tissuetype)[which(ccle.tissuetype[ , "tissue.type"]=="breast")]
   ccle.breast.cells <- intersectList(ccle.breast.cells, rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
   ccle.breast.genes <- ccle.genes.fpkm[ccle.breast.cells, , drop=FALSE]
@@ -168,7 +168,7 @@ fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue")) {
     no <- nrow(all.biomarkers[[i]])
     if(no > 0) {
       nn <- ifelse(no >= 4, no%/%4, 1)
-      pdf(file=file.path(path.diagrams, sprintf("%s_exp_%s.pdf", names(all.biomarkers)[i], validation.method)), width=14, height=3.5 * nn)
+      pdf(file=file.path(plot.path, sprintf("%s_exp_%s.pdf", names(all.biomarkers)[i], validation.method)), width=14, height=3.5 * nn)
       par(mfrow=c(nn,4))
       for( j in 1:nrow(all.biomarkers[[i]])){
         validation.stat <- all.biomarkers[[i]][j, "validation.stat"]
@@ -239,8 +239,8 @@ fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue")) {
   validated.isoforms <- sapply(isoformstt, function(x){if(("validated" %in% rownames(x)) & ("isoform" %in% colnames(x))){x["validated", "isoform"]/sum(x[, "isoform"])} else {0}})
   validated.genes <- sapply(isoformstt, function(x){if(("validated" %in% rownames(x)) & ("gene" %in% colnames(x))) {x["validated", "gene"]/sum(x[, "gene"])} else{0}})
   
-  WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(path.diagrams, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
-  save(all.biomarkers, file=file.path(path.diagrams, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
+  WriteXLS::WriteXLS("all.biomarkers", ExcelFileName=file.path(plot.path, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
+  save(all.biomarkers, file=file.path(plot.path, sprintf("biomarkers.gtex.%s.xlsx", validation.method)))
   
   validation.res <- cbind("gtex.lower"=validated.gtex.lower, 
                           "gtex.greater"=validated.gtex.greater, 
@@ -248,8 +248,8 @@ fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue")) {
                           "isoform"=validated.isoforms,
                           "gene"=validated.genes)
   write.csv(cbind(validation.res,
-                  "biomarkers.no"=biomarkers.no), file.path(path.diagrams, sprintf("validated.regarding.gtex.%s.csv", validation.method)))
-  pdf(file.path(path.diagrams, sprintf("validated.biomarkers.proportion.%s.pdf", validation.method)), height=7 , width=7)
+                  "biomarkers.no"=biomarkers.no), file.path(plot.path, sprintf("validated.regarding.gtex.%s.csv", validation.method)))
+  pdf(file.path(plot.path, sprintf("validated.biomarkers.proportion.%s.pdf", validation.method)), height=7 , width=7)
   mycol <- RColorBrewer::brewer.pal(n=8, name="Set2")[1:5]
   par(mar=c(7,5,5,6))
   par(oma=c(2,2,2,2))
@@ -257,7 +257,7 @@ fnGtex <- function(all.biomarkers, validation.method=c(stat, "pvalue")) {
   legend("topright", legend=colnames(validation.res), fill=mycol, bty="n")
   dev.off()
 }
-fnPlotCCLEGDSC <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
+fnPlotCCLEGDSC <- function(biomarker, tissue.type, my.xlim, my.ylim, drug, plot.path=path.diagrams) {
   
   exp.type <- paste0(biomarker$type, ".exp")
   ccle.sensitivity <- subset(ccle.drug.sensitivity, !is.na(ccle.drug.sensitivity[, drug]), select=drug)
@@ -312,7 +312,7 @@ fnPlotCCLEGDSC <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
   title(sprintf("CCLE/GDSC\n%s and %s in %s cell lines", biomarker$label, gsub("drugid_", "", drug), tissue.type), cex.main=.8)
   
 }
-fnPlotCCLE <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
+fnPlotCCLE <- function(biomarker, tissue.type, my.xlim, my.ylim, drug, plot.path=path.diagrams) {
   
   exp.type <- paste0(biomarker$type, ".exp")
   ccle.sensitivity <- subset(ccle.drug.sensitivity, !is.na(ccle.drug.sensitivity[, drug]), select=drug)
@@ -342,7 +342,7 @@ fnPlotCCLE <- function(biomarker, tissue.type, my.xlim, my.ylim, drug) {
   
 }
 fnPlotAUC <- function(first, second, drug, tissue.type, color) {
-  switch(first, "gray"={first.db <- gray.drug.sensitivity}, "ccle"={first.db <- ccle.drug.sensitivity}, "gdsc"={first.db <- gdsc.drug.sensitivity})
+  switch(first, "gray"={first.db <- gray.drug.sensitivity}, "ccle"={first.db <- ccle.drug.sensitivity}, "gdsc"={first.db <- gdsc.drug.sensitivity}, plot.path=path.diagrams)
   switch(second, "gray"={second.db <- gray.drug.sensitivity}, "ccle"={second.db <- ccle.drug.sensitivity}, "gdsc"={second.db <- gdsc.drug.sensitivity})
   
   first.db <- first.db[complete.cases(first.db[, drug]),]
@@ -375,7 +375,7 @@ fnPlotAUC <- function(first, second, drug, tissue.type, color) {
   #grid(nx=sensitivity[,1], ny=sensitivity[,2], lty=1)
   points(sensitivity[,1], sensitivity[,2], pch=19, col=color)
 }
-fnPlotEXP <- function(first, second, biomarker) {
+fnPlotEXP <- function(first, second, biomarker, plot.path=path.diagrams) {
   switch(first, "ccle.gene"={first.db <- ccle.genes.fpkm}, "ccle.isoform"={first.db <- ccle.isoforms.fpkm})
   switch(second, "gray.gene"={second.db <- gray.genes.fpkm}, "gray.isoform"={second.db <- gray.isoforms.fpkm})
   
@@ -423,7 +423,7 @@ fnFetchBiomarkers <- function(top.significant.biomarkers, drug, indices) {
   }
   return(biomarkers)
 }
-fnPlotAUCoverCellLinesCCLE.GDSC <- function(drug, tissue.type, biomarkers, biomarkers.order) {
+fnPlotAUCoverCellLinesCCLE.GDSC <- function(drug, tissue.type, biomarkers, biomarkers.order, plot.path=path.diagrams) {
   ccle.sensitivity <- subset(ccle.drug.sensitivity, !is.na(ccle.drug.sensitivity[,drug]), select=drug)
   cells <- intersectList(rownames(ccle.sensitivity), rownames(gdsc.drug.sensitivity), rownames(ccle.tissuetype), rownames(ccle.genes.fpkm), rownames(ccle.isoforms.fpkm))
   sensitivity <- cbind(ccle.sensitivity[cells, ], gdsc.drug.sensitivity[cells, drug], ccle.tissuetype[cells, "tissue.type"])
@@ -477,7 +477,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC <- function(drug, tissue.type, biomarkers, bioma
   #                     seq(1,0,length=256))  # Blue
   
   #exp.db <- exp.db[, biomarkers.toPlot]
-  pdf(file=file.path(path.diagrams, sprintf("%s_%s_CCLE_GDSC.pdf", gsub("drugid_","",drug), phenotype)), height=7, width=14)  
+  pdf(file=file.path(plot.path, sprintf("%s_%s_CCLE_GDSC.pdf", gsub("drugid_","",drug), phenotype)), height=7, width=14)  
   par(mar=c(5, 8, 2, 2))
   #par(mfrow=c(2,1))
   image(exp.db, col=exp.col[,"col"], axes=FALSE)
@@ -486,7 +486,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC <- function(drug, tissue.type, biomarkers, bioma
   axis(2,at=at.place, labels=colnames(exp.db), las=2, cex.axis=.6, tick=FALSE)
   #plot(1:nrow(sensitivity),sensitivity[,1], type="l", xlim=my.xlim, ylim=my.ylim, xlab="cell lines", ylab=colnames(sensitivity)[1],main=sprintf("%s AUC over %s cell lines in %s", toupper(dataset.name), tissue.type, gsub("drugid_","",drug)), cex.main=.9)
   dev.off()
-  pdf(file=file.path(path.diagrams, sprintf("%s_%s_CCLE_GDSC_2.pdf", gsub("drugid_","",drug), phenotype)), height=5, width=12)    
+  pdf(file=file.path(plot.path, sprintf("%s_%s_CCLE_GDSC_2.pdf", gsub("drugid_","",drug), phenotype)), height=5, width=12)    
   par(mar=c(12, 5, 2, 8))
   plot(NA, xlim=my.xlim, ylim=my.ylim, ylab='', xlab='', axes=FALSE)
   axis(1, at=1:nrow(sensitivity), labels=rownames(sensitivity), las=2, cex.axis=1.5, tck=-.05)
@@ -497,7 +497,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC <- function(drug, tissue.type, biomarkers, bioma
   
   dev.off()
 }
-fnPlotAUCoverCellLinesCCLE.GDSC.union.cells <- function(drug, tissue.type, biomarkers, biomarkers.order) {
+fnPlotAUCoverCellLinesCCLE.GDSC.union.cells <- function(drug, tissue.type, biomarkers, biomarkers.order, plot.path=path.diagrams) {
   ccle.sensitivity <- ccle.drug.sensitivity[which(!is.na(ccle.drug.sensitivity[ , drug])) , drug, drop=FALSE]
   gdsc.sensitivity <- gdsc.drug.sensitivity[which(!is.na(gdsc.drug.sensitivity[ , drug])) , drug, drop=FALSE]
 
@@ -562,7 +562,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC.union.cells <- function(drug, tissue.type, bioma
   #                     seq(1,0,length=256))  # Blue
   
   #exp.db <- exp.db[, biomarkers.toPlot]
-  pdf(file=file.path(path.diagrams, sprintf("%s_%s_CCLE_GDSC_union.pdf", gsub("drugid_","",drug), phenotype)), height=7, width=14)  
+  pdf(file=file.path(plot.path, sprintf("%s_%s_CCLE_GDSC_union.pdf", gsub("drugid_","",drug), phenotype)), height=7, width=14)  
   par(mar=c(5, 8, 2, 2))
   #par(mfrow=c(2,1))
   image(exp.db, col=exp.col[,"col"], axes=FALSE)
@@ -571,7 +571,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC.union.cells <- function(drug, tissue.type, bioma
   axis(2,at=at.place, labels=colnames(exp.db), las=2, cex.axis=.6, tick=FALSE)
   #plot(1:nrow(sensitivity),sensitivity[,1], type="l", xlim=my.xlim, ylim=my.ylim, xlab="cell lines", ylab=colnames(sensitivity)[1],main=sprintf("%s AUC over %s cell lines in %s", toupper(dataset.name), tissue.type, gsub("drugid_","",drug)), cex.main=.9)
   dev.off()
-  pdf(file=file.path(path.diagrams, sprintf("%s_%s_CCLE_GDSC_union_2.pdf", gsub("drugid_","",drug), phenotype)), height=5, width=12)    
+  pdf(file=file.path(plot.path, sprintf("%s_%s_CCLE_GDSC_union_2.pdf", gsub("drugid_","",drug), phenotype)), height=5, width=12)    
   par(mar=c(12, 5, 2, 8))
   plot(NA, xlim=my.xlim, ylim=my.ylim, ylab='', xlab='', axes=FALSE)
   axis(1, at=1:nrow(sensitivity), labels=rownames(sensitivity), las=2, cex.axis=1.5, tck=-.05)
@@ -582,7 +582,7 @@ fnPlotAUCoverCellLinesCCLE.GDSC.union.cells <- function(drug, tissue.type, bioma
   
   dev.off()
 }
-fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.specificity=NULL, suffix)  {
+fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.specificity=NULL, suffix, plot.path=path.diagrams)  {
   sensitivity <- subset(gray.drug.sensitivity, !is.na(gray.drug.sensitivity[,drug]), select=drug)
   sensitivity <- cbind(sensitivity , "col"="#000000")
   sensitivity <- sensitivity[order(as.numeric(sensitivity[,drug])),]
@@ -657,7 +657,7 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
     }
 
   if(ncol(exp.db) == 1){
-    pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=2, width=22)  
+    pdf(file=file.path(plot.path, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=2, width=22)  
     par(mar=c(1, 1, 1, 17))
     par(oma=c(2,2,2,2))
     image(exp.db, col=exp.col[,"col"], axes=FALSE)
@@ -668,7 +668,7 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
   }else {
     ff <- FALSE
     if(length(xx) < 4){ff <- TRUE}
-    pdf(file=file.path(path.diagrams, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=ifelse(ff, 3, 9) , width=17)
+    pdf(file=file.path(plot.path, sprintf("%s_%s_Gray_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=ifelse(ff, 3, 9) , width=17)
     #par(mar=c(2, 2, 2, 8))
    
     if(drug=="paclitaxel"){par(oma=c(0,0,0,13))} else{ par(oma=c(0,0,0,10))}
@@ -689,7 +689,7 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
   #axis(4,at=(0:(ncol(exp.db) - 1))/(ncol(exp.db) - 1), labels=sapply(biomarkers, function(x){ifelse(x[["gtex"]] == "tumor.specific", "*", NA)}, simplify=T), las=2, cex.axis=.8, tick=FALSE)
   #mtext(side=4, line=-3, outer=F, text=xx[hv$rowInd], at=1:length(xx), las=2, col=label.col)
   dev.off()
-  pdf(file=file.path(path.diagrams, sprintf("%s_%s_AUC_Gray_2_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=5, width=15)  
+  pdf(file=file.path(plot.path, sprintf("%s_%s_AUC_Gray_2_%s.pdf", gsub("drugid_","",drug), phenotype, suffix)), height=5, width=15)  
   par(mar=c(12,5,2,8))
   plot(NA, xlim=my.xlim, ylim=my.ylim,ylab='',xlab='', axes=FALSE)
   axis(1,at=1:nrow(sensitivity), labels=rownames(sensitivity), las=2, cex.axis=1.5, tck=-.05)
@@ -706,7 +706,7 @@ fnPlotAUCoverCellLinesGray <- function(drug, tissue.type, biomarkers, gray.speci
     return(NA)
   }
 }
-fnPlotEffectSize <- function (drug, biomarkers, effect.size, biomarkers.order)  {
+fnPlotEffectSize <- function (drug, biomarkers, effect.size, biomarkers.order, plot.path=path.diagrams)  {
   biomarkers.effect.size <-  sapply(biomarkers, function(x){x[effect.size]})
   biomarkers.effect.size <- do.call("c", biomarkers.effect.size)
   biomarkers.effect.size <- biomarkers.effect.size - .5
@@ -717,13 +717,13 @@ fnPlotEffectSize <- function (drug, biomarkers, effect.size, biomarkers.order)  
   names(biomarkers.effect.size) <- NULL
   mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
   
-  pdf(file.path(path.diagrams,sprintf("%s_%s_GRAY.pdf", drug, effect.size)), height=8, width=2)
+  pdf(file.path(plot.path,sprintf("%s_%s_GRAY.pdf", drug, effect.size)), height=8, width=2)
   barplot(biomarkers.effect.size , horiz=T, col=sapply(biomarkers.effect.size , function(x){ifelse(x>=0,mycol3[4], mycol3[3])}),axes=FALSE)
   axis(1, at=seq(-.2, .2, .1), cex=.7)
   dev.off()
   
 }
-fnPlotLogPvalue <- function (drug, biomarkers, pvalue.col.name, effect.size.col, biomarkers.order)  {
+fnPlotLogPvalue <- function (drug, biomarkers, pvalue.col.name, effect.size.col, biomarkers.order, plot.path=path.diagrams)  {
   biomakers.label <- sapply(biomarkers, function(x){x["short.label"]})
   biomarkers.pvalue <-  sapply(biomarkers, function(x){x[pvalue.col.name]})
   names(biomarkers.pvalue) <- biomakers.label
@@ -737,7 +737,7 @@ fnPlotLogPvalue <- function (drug, biomarkers, pvalue.col.name, effect.size.col,
   names(biomarkers.pvalue) <- NULL
   mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
   
-  pdf(file.path(path.diagrams,sprintf("%s_%s.pdf", drug, pvalue.col.name)), height=8, width=2)
+  pdf(file.path(plot.path,sprintf("%s_%s.pdf", drug, pvalue.col.name)), height=8, width=2)
   barplot(biomarkers.pvalue , horiz=T, col=sapply(biomarkers.pvalue , function(x){ifelse(x>=0, mycol3[4], mycol3[3])}))
   dev.off()
   

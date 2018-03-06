@@ -34,7 +34,7 @@ fnNormalizeTraining <- function(ccle.model, gdsc.model) {
   rownames(xx) <- rownames(ccle.model)
   return(xx)
 }
-fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, best.isoform) {
+fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, best.isoform, plot.path=path.diagrams) {
   mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")
   red <- mycol[1]  
   blue <- mycol[2]
@@ -69,7 +69,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
   xx <- which(apply(exp.db.iso, MARGIN=2, function(x){which(all(is.na(x)))}) == 1)
   if(length(xx) > 0) {exp.db.iso <- exp.db.iso[, -xx, drop=FALSE]}
   if(ncol(exp.db.iso) == 1) {
-    pdf(file = file.path(path.diagrams, sprintf("%s_isoform.pdf", file.name)), height=5, width=12) 
+    pdf(file = file.path(plot.path, sprintf("%s_isoform.pdf", file.name)), height=5, width=12) 
     par(mar=c(9, 2, 5, 15))
     par(oma=c(2,2,2,2))
 #    image(exp.db.iso, col = exp.col[,"col"], axes = FALSE)
@@ -79,7 +79,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
   }else {
     ff <- FALSE
     if(ncol(exp.db.iso) < 4){ff <- TRUE}
-    pdf(file = file.path(path.diagrams, sprintf("%s_isofoms.pdf", file.name)), height=ifelse(ff, 3, 9), width=17) 
+    pdf(file = file.path(plot.path, sprintf("%s_isofoms.pdf", file.name)), height=ifelse(ff, 3, 9), width=17) 
     par(oma=c(0,0,0,13))
     if(cluster){
         # hv <- gplots::heatmap.2(t(exp.db.iso), Colv=NA, Rowv=T, dendrogram="none", col=exp.col[,"col"], scale="row", trace="none", key=FALSE,
@@ -103,7 +103,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
   }
   dev.off()
   
-  pdf(file = file.path(path.diagrams, sprintf("%s_gene.pdf", file.name)), height=5, width=12) 
+  pdf(file = file.path(plot.path, sprintf("%s_gene.pdf", file.name)), height=5, width=12) 
   exp.db.gene <- exp.db[,ncol(exp.db), drop=FALSE]
   colnames(exp.db.gene) <- ""
   par(mar=c(7,1,7,18))
@@ -117,7 +117,7 @@ fnPlotHeatMap <- function(sensitivity, expression, file.name, cluster=FALSE, bes
     return(gsub("[***]", "", colnames(exp.db.iso)[rev(hv$rowInd)]))
   }
 }
-fnPlotHeatMap.union.cells <- function(ccle.sensitivity, gdsc.sensitivity, expression, file.name, cluster=FALSE, best.isoform) {
+fnPlotHeatMap.union.cells <- function(ccle.sensitivity, gdsc.sensitivity, expression, file.name, cluster=FALSE, best.isoform, plot.path=path.diagrams) {
   mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")
   red <- mycol[1]  
   blue <- mycol[2]
@@ -162,7 +162,7 @@ fnPlotHeatMap.union.cells <- function(ccle.sensitivity, gdsc.sensitivity, expres
   palette.breaks <- seq(quantile.range["0%"], quantile.range["100%"], 0.1)
   color.palette  <- colorRampPalette(c(blue, "white", red))(length(palette.breaks) - 1)
   
-  pdf(file = file.path(path.diagrams, sprintf("%s_isofoms_union.pdf", file.name)), height=9, width=17) 
+  pdf(file = file.path(plot.path, sprintf("%s_isofoms_union.pdf", file.name)), height=9, width=17) 
   exp.db.iso <- exp.db[,-ncol(exp.db), drop=FALSE]
   colnames(exp.db.iso)[which(colnames(exp.db.iso) == best.isoform)] <- sprintf("%s***", best.isoform)
   xx <- which(apply(exp.db.iso, MARGIN=2, function(x){which(all(is.na(x)))}) == 1)
@@ -198,7 +198,7 @@ fnPlotHeatMap.union.cells <- function(ccle.sensitivity, gdsc.sensitivity, expres
   }
   dev.off()
   
-  pdf(file = file.path(path.diagrams, sprintf("%s_gene_union.pdf", file.name)), height=5, width=12) 
+  pdf(file = file.path(plot.path, sprintf("%s_gene_union.pdf", file.name)), height=5, width=12) 
   exp.db.gene <- exp.db[,ncol(exp.db), drop=FALSE]
   par(mar=c(7,1,7,18))
   par(oma=c(2,2,2,2))
@@ -211,7 +211,7 @@ fnPlotHeatMap.union.cells <- function(ccle.sensitivity, gdsc.sensitivity, expres
   my.xlim = c(1,nrow(sensitivity))
   my.ylim = range(as.numeric(sensitivity[,"union"]))
   
-  pdf(file=file.path(path.diagrams, sprintf("%s_sensitivity_union.pdf", file.name)), height=5, width=15)    
+  pdf(file=file.path(plot.path, sprintf("%s_sensitivity_union.pdf", file.name)), height=5, width=15)    
   par(mar=c(12, 5, 2, 8))
   plot(NA, xlim=my.xlim, ylim=my.ylim, ylab='', xlab='', axes=FALSE)
   axis(1, at=1:nrow(sensitivity), labels=rownames(sensitivity), las=2, cex.axis=1.5, tck=-.05)
@@ -226,14 +226,14 @@ fnPlotHeatMap.union.cells <- function(ccle.sensitivity, gdsc.sensitivity, expres
     return(gsub("[***]", "", colnames(exp.db.iso)[rev(hv$rowInd)]))
   }
 }
-fnPlotSensitivity <- function(sensitivity, file.name, type="validation") {
+fnPlotSensitivity <- function(sensitivity, file.name, type="validation", plot.path=path.diagrams) {
   sensitivity <- sensitivity[which(!is.na(sensitivity))]
   sensitivity <- sensitivity[order(sensitivity)]
   
   my.xlim = c(1,length(sensitivity))
   my.ylim = range(sensitivity)
   
-  pdf(file = file.path(path.diagrams, sprintf("%s_sensitivity.pdf", file.name)), height=5, width=ifelse(length(sensitivity) > 20, 12, 12))  
+  pdf(file = file.path(plot.path, sprintf("%s_sensitivity.pdf", file.name)), height=5, width=ifelse(length(sensitivity) > 20, 12, 12))  
   par(mar=c(12,8,1,1))
 #  par(oma=c(2,2,2,2))
   plot(NA, xlim = my.xlim, ylim = my.ylim,ylab='',xlab='', axes = FALSE)
@@ -255,10 +255,10 @@ fnPlotSensitivity <- function(sensitivity, file.name, type="validation") {
   
   dev.off()
 }
-fnPlotEstimates <- function(isoform.models, gene.model, isoforms, file.name, cutoff) {
+fnPlotEstimates <- function(isoform.models, gene.model, isoforms, file.name, cutoff, plot.path=path.diagrams) {
   isoforms=rev(isoforms)
   mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
-  pdf(file.path(path.diagrams,sprintf("%s_estimates.pdf", file.name)), height = 8, width = 2)
+  pdf(file.path(plot.path,sprintf("%s_estimates.pdf", file.name)), height = 8, width = 2)
   #par(oma=c(0, 0, 0, 0))
   par(mar=c(3, 1, 1, 1))
   tt <- sapply(isoforms , function(x){ifelse(isoform.models[x, "pvalue"] < cutoff, isoform.models[x, "estimate"], 0)})
@@ -268,10 +268,10 @@ fnPlotEstimates <- function(isoform.models, gene.model, isoforms, file.name, cut
   barplot(tt, horiz = T, col = sapply(tt , function(x){ifelse(x>=0,mycol3[4], mycol3[3])}), yaxt='n', cex.axis=1.2)
   dev.off()
 }
-fnPlotPvalues <- function(isoform.models, gene.model, isoforms, file.name, cutoff) {
+fnPlotPvalues <- function(isoform.models, gene.model, isoforms, file.name, cutoff, plot.path=path.diagrams) {
   isoforms=rev(isoforms)
   mycol3 <- RColorBrewer::brewer.pal(n=4, name="Set3")
-  pdf(file.path(path.diagrams,sprintf("%s_pvalues.pdf", file.name)), height = 8, width = 2)
+  pdf(file.path(plot.path,sprintf("%s_pvalues.pdf", file.name)), height = 8, width = 2)
   #par(oma=c(0, 0, 0, 0))
   par(mar=c(3, 1, 1, 1))
   #tt <- sapply(isoforms , function(x){ifelse(as.numeric(isoform.models[x, "pvalue"]) < cutoff, -log10(as.numeric(isoform.models[x, "pvalue"])) * sign(as.numeric(isoform.models[x, "estimate"])), 0)})
@@ -290,7 +290,7 @@ fnConfidenceIntervalDifference <- function(model1, model2, x1, x2){
   t.stat <- (model1$estimate - model2$estimate) / sqrt(model1$se^2 + model2$se^2 - 2 * r * model1$se * model2$se)
   diff.ci.p <- pt(q=as.numeric(t.stat), df=n - 1, lower.tail=FALSE)
 }
-fnCor <- function(drug, gene, xx, isoforms, best.isoform) {
+fnCor <- function(drug, gene, xx, isoforms, best.isoform, plot.path=path.diagrams) {
   tt <- xx
   xx[lower.tri(xx)] <- NA
   diag(xx) <- NA
@@ -312,7 +312,7 @@ fnCor <- function(drug, gene, xx, isoforms, best.isoform) {
   neg.palette.breaks <- c(-1, neg.palette.breaks)
   
   cc <- colorRampPalette(c(blue, "white", red))(length(unique(as.vector(xx[!is.na(xx)]))))
-  #pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_gene_corr.pdf", drug, gene)), height=6, width=6)
+  #pdf(file.path(plot.path, sprintf("%s_%s_isoforms_gene_corr.pdf", drug, gene)), height=6, width=6)
   #par(oma=c(0,0,6,6))
   #hv <- gplots::heatmap.2(xx, Colv=NA, Rowv=NA, dendrogram="none", col=c(neg.color.palette, color.palette), breaks = c(neg.palette.breaks, palette.breaks), trace="none", key=FALSE,
   #                        labRow=colnames(xx)[1:ncol(xx)-1], cexRow = 0.1 + 1/ifelse(log10(ncol(xx)-1)==0, 1, log10(ncol(xx)-1)),
@@ -338,18 +338,18 @@ fnCor <- function(drug, gene, xx, isoforms, best.isoform) {
    tt <- tt[best.isoform, isoforms]
   cc <- rep("gray", length(tt))
   cc[which(names(tt) == best.isoform)] <- "red"
-  pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_gene_corr_bar_plot.pdf", drug, gene)), height=6, width=2)
+  pdf(file.path(plot.path, sprintf("%s_%s_isoforms_gene_corr_bar_plot.pdf", drug, gene)), height=6, width=2)
   barplot(tt, horiz = T, col=cc , yaxt='n', cex.axis=1.2)
   abline(v=0.8, lty=2)
   dev.off()
 }
-fnExp <- function(drug, gene, exp, best.isoform) {
+fnExp <- function(drug, gene, exp, best.isoform, plot.path=path.diagrams) {
   tt <- apply(exp, MARGIN=2, function(x){mean(x)})
   tt <- tt/sum(tt, na.rm=T)
   tt[which(is.na(tt))] <- 0
   cc <- rep("gray", length(tt))
   cc[which(names(tt) == best.isoform)] <- "red"
-  pdf(file.path(path.diagrams, sprintf("%s_%s_isoforms_relative_exp.pdf", drug, gene)), height=6, width=2)
+  pdf(file.path(plot.path, sprintf("%s_%s_isoforms_relative_exp.pdf", drug, gene)), height=6, width=2)
   barplot(tt, horiz = T, col=cc , yaxt='n', cex.axis=1.2)
   dev.off()
 }

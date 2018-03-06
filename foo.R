@@ -497,7 +497,7 @@ Check.KnownAssociations <- function(associations) {
   }
   write.csv(known.associations, file = file.path(path.diagrams,"KnownAssociations.csv"))
 }
-barplot.models <- function(model, isoforms_No=c("all", "1.isoform", "n.isoforms"), signed=c("all", "positive", "negative"), prototype, main.title, breakpoint,  yaxis=c("Regular", "Log"), cex=1.1) {
+barplot.models <- function(model, isoforms_No=c("all", "1.isoform", "n.isoforms"), signed=c("all", "positive", "negative"), prototype, main.title, breakpoint,  yaxis=c("Regular", "Log"), cex=1.1, plot.file="") {
   isoforms_No <- match.arg(isoforms_No)
   signed <- match.arg(signed)
   barplot.matrix <- matrix(NA, nrow=1 , ncol=(length(drugs) * length(prototype)))
@@ -523,10 +523,18 @@ barplot.models <- function(model, isoforms_No=c("all", "1.isoform", "n.isoforms"
   Glabels <- colnames(ccle.drug.sensitivity.ordered)
   if(breakpoint == "Regular")
   {
-    File <- file.path(path.diagrams, sprintf("BarPlot_%s-isoforms-%s-sign_%s", isoforms_No, signed, str_replace_all(main.title, "[^[:alnum:]]","")))    
+    if(plot.file == ""){
+        File <- file.path(path.diagrams, sprintf("BarPlot_%s-isoforms-%s-sign_%s", isoforms_No, signed, str_replace_all(main.title, "[^[:alnum:]]","")))    
+    }else{
+        File <- plot.file
+    }
     mybarplot(Filename=File, data=barplot.matrix, barsNo=length(prototype), groupNo=length(drugs), group.labels=Glabels, ylab.label="Number of Associated Genes", legend.lables=Models.names[prototype], main.label=main.title, yaxis=yaxis, cex=cex) 
   }else{
-    File <- file.path(path.diagrams, sprintf("Gapped_BarPlot_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
+    if(plot.file == ""){
+        File <- file.path(path.diagrams, sprintf("Gapped_BarPlot_%s_%s.pdf",isoforms_No,str_replace_all(main.title, "[^[:alnum:]]","")))    
+    }else{
+        File <- plot.file
+    }
     mybarplot.gap(Filename=File, data=barplot.matrix, barsNo=length(prototype), group.labels=Glabels, ylab.label="Number of Associated Genes", legend.lables=Models.names[prototype], main.label=main.title, breakpoint) 
   }
 }
@@ -622,7 +630,7 @@ myScatterPlot <- function(Name, x, y, method=c("plain", "transparent", "smooth")
     )
   }
 }
-cindexDistributions <- function(){
+cindexDistributions <- function(plot.file=""){
   if(!require("easyGgplot2")){
     install.packages("devtools")
     library(devtools)
@@ -662,7 +670,12 @@ cindexDistributions <- function(){
       theme(plot.title = element_text(hjust = 0.5, face="bold")) +
       theme(panel.spacing = unit(1, "lines"))
   }
-  pdf(file.path(path.diagrams, "hist_horizental_all_data_types.pdf"), width=12, height=12)
+  if(plot.file == ""){
+        File <- file.path(path.diagrams, "hist_horizental_all_data_types.pdf")  
+  }else{
+        File <- plot.file
+  }
+  pdf(File, width=12, height=12)
   do.call(grid.arrange, c(hist.plots, list(ncol=4, heights=rep(3, 4), widths=rep(3, 4))))
   dev.off()
 }

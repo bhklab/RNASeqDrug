@@ -8,58 +8,84 @@
 
 #path.diagrams <- file.path("result/slope0_weightes_1_1")
 
-# load(file.diagrams, "all.biomarkers.RData", verbose=T)
 #require(gdata) || stop("Library gdata is not available!")
 #myfn <- file.path(path.diagrams, "all.biomarkers.xlsx")
 #all.biomarkers <- gdata::read.xls(xls=myfn, sheet=12, stringsAsFactors=FALSE)
 
-require(PharmacoGx) || stop("Library PharmacoGx is not available!")
-require(Biobase) || stop("Library Biobase is not available!")
-require(calibrate) || stop("Library calibrate is not available!")
-require(stringr) || stop("Library stringr is not available!")
-require(gdata) || stop("Library gdata is not available!")
-require(genefu) || stop("Library genefu is not available!")
-require(xtable) || stop("Library xtable is not available!")
-require(survcomp) || stop("Library survcomp is not available!")
+args <- commandArgs(trailingOnly=TRUE)
+#args <- c("auc_recomputed_ccle_gdsc", "0.55", "0.05", "glm", "gaussian", "cindex", "fdr", "auc_recomputed", "TRUE", "training_ccle_gdsc.RData")
+
+
+require(Biobase) || source("https://www.bioconductor.org/biocLite.R")
+
+require(PharmacoGx) || biocLite("PharmacoGx")
+require(calibrate) || biocLite("calibrate")
+require(stringr) || biocLite("stringr")
+require(gdata) || biocLite("gdata")
+require(genefu) || biocLite("genefu")
+require(xtable) || biocLite("xtable")
+require(survcomp) || biocLite("survcomp")
+require(VennDiagram) || biocLite("VennDiagram")
+require(ggplot2) || biocLite("ggplot2")
+require(grDevices) || biocLite("grDevices")
+require(gridExtra) || biocLite("gridExtra")
+require(RColorBrewer) || biocLite("RColorBrewer")
+require("reshape2") || biocLite("reshape2")
+require(ggthemes) || biocLite("ggthemes")
 options(stringsAsFactors=FALSE)
-path.data <- "data"
-path.code <- file.path("code")
-path.result <- file.path("result")
-adjustment.method <- "fdr"
+path.result <- "../results"
+path.data <- "../data"
+path.code <- "."
+path.diagrams <- file.path(path.result, as.character(args[1]))
+if(!file.exists(path.diagrams)) {dir.create(file.path(path.diagrams))}
+
+
+effect.size.cut.off <- as.numeric(args[2])
+pvalue.cut.off <- as.numeric(args[3])
+tissue <- NULL
+model.method <- as.character(args[4])
+glm.family <- as.character(args[5]) 
+effect.size <- as.character(args[6]) #c("r.squared", "cindex")
+stat <- effect.size
+print(sprintf("Effect size is: %s.\n Stat is: %s.\n", effect.size, stat))
+adjustment.method <- as.character(args[7])
+sensitivity.type <- phenotype <- as.character(args[8])
+RNA_seq.normalize <- as.logical(args[9])
+print(paste0("Args are: ", args, collapse=", "))
+
 
 source(file.path(path.code, "foo_gCSI.R"))
 source(file.path(path.code,"foo_PreValidation_gCSI.R"))
 set.seed(12345)
 
 tissue <- NULL
-model.method <- "glm"
-glm.family <- "gaussian" 
+# model.method <- "glm"
+# glm.family <- "gaussian" 
 #stat <- "R2"
-stat <- "cindex"
+# stat <- "cindex"
 
 # load(file.path(path.data, "annotation.RData"))
 file.sensitivity <- "auc_recomputed_drug_association_ccle_gdsc.RData"
 training.type <- ifelse(regexpr("gdsc", file.sensitivity) < 1, "CCLE", "CCLE_GDSC")
-phenotype <- sensitivity.type <- paste0(unlist(strsplit(file.sensitivity, "_"))[1:2], collapse="_") 
 breast.specific <- ifelse(regexpr("breast", file.sensitivity) < 1, FALSE, TRUE)
 
-if(sensitivity.type == "slope_recomputed"){
-  if(training.type == "CCLE_GDSC")
-  {
-    ss<- unlist(strsplit(file.sensitivity, "_"))
-    res.weight <- as.numeric(ss[3]); sens.weight <- as.numeric(ss[4]);
-    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
-  }else
-  {
-    ss <- unlist(strsplit(file.sensitivity, "_"))
-    res.weight <- as.numeric(ss[4]); sens.weight <- as.numeric(ss[5]);
-    path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))    
-  }
-}else{
-  ss <- unlist(strsplit(file.sensitivity, "_"))
-  path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
-}
-load(file.path(path.data, "PSets/gCSI_hs.RData"))
+# if(sensitivity.type == "slope_recomputed"){
+#   if(training.type == "CCLE_GDSC")
+#   {
+#     ss<- unlist(strsplit(file.sensitivity, "_"))
+#     res.weight <- as.numeric(ss[3]); sens.weight <- as.numeric(ss[4]);
+#     path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
+#   }else
+#   {
+#     ss <- unlist(strsplit(file.sensitivity, "_"))
+#     res.weight <- as.numeric(ss[4]); sens.weight <- as.numeric(ss[5]);
+#     path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))    
+#   }
+# }else{
+#   ss <- unlist(strsplit(file.sensitivity, "_"))
+#   path.diagrams <- file.path(path.result, paste(ss[1:(length(ss)-2)], collapse="_"))
+# }
+load(file.path(path.data, "gCSI_hs.RData"))
 
 tissueCounts <- table(cellInfo(gCSI)$tissue)
 keep.tissues <- names(tissueCounts)[tissueCounts>2]
@@ -71,8 +97,8 @@ gCSI <- subsetTo(gCSI, cells=keep.cells)
 
 gCSI.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=gCSI, sensitivity.measure=sensitivity.type))
 
-load(file.path(path.data, "PSets/CCLE_hs.RData"))
-load(file.path(path.data, "PSets/GDSC.RData"))
+load(file.path(path.data, "CCLE_hs.RData"))
+load(file.path(path.data, "GDSC.RData"))
 if(training.type == "CCLE_GDSC") {
 
   drugs <- intersect(PharmacoGx::drugNames(CCLE), PharmacoGx::drugNames(GDSC))
@@ -115,7 +141,8 @@ gCSI.genes.fpkm[is.na(gCSI.genes.fpkm)] <- 0
 gCSI.isoforms.fpkm[is.na(gCSI.isoforms.fpkm)] <- 0
 
 
-load(file.path(path.diagrams, "all.biomarkers.RData"))
+# load(file.path(path.diagrams, "all.biomarkers.RData"))
+load(file.path(path.data, "all.biomarkers.RData"))
 max.bio.no <- max(sapply(all.biomarkers, function(x){nrow(x)}))
 annot.ensembl.all.genes=fData(CCLE@molecularProfiles$rnaseq)
 annot.ensembl.all.genes$gene_id <- annot.ensembl.all.genes$EnsemblGeneId
@@ -156,9 +183,9 @@ mycol <- RColorBrewer::brewer.pal(n=4, name="Set1")
 red <- mycol[1]  
 blue <- mycol[2]
 
-model.method <- "glm"
-glm.family <- "gaussian"
-stat <- "cindex"
+# model.method <- "glm"
+# glm.family <- "gaussian"
+# stat <- "cindex"
 
 biomarkers <- all.biomarkers
 
@@ -202,7 +229,7 @@ for(drug in drugs) {
             results <- fnRunbootstrap(models=list("M0"=M0, "M2"=M2))
             tt[tt$biomarker.id==biomarkers[[i]]$symbol,stat.colname] <- median(results[["M2"]])
             tt[tt$biomarker.id==biomarkers[[i]]$symbol,"gCSI.bootstrap.pvalue"] <- wilcox.test(results[["M2"]], results[["M0"]], paired=TRUE, alternative="greater")$p.value
-            if(tt[tt$biomarker.id==biomarkers[[i]]$symbol,"gCSI.bootstrap.pvalue"]<=0.05 && tt[tt$biomarker.id==biomarkers[[i]]$symbol,stat.colname] >= 0.55){
+            if(tt[tt$biomarker.id==biomarkers[[i]]$symbol,"gCSI.bootstrap.pvalue"]<=pvalue.cut.off && tt[tt$biomarker.id==biomarkers[[i]]$symbol,stat.colname] >= effect.size.cut.off){
               tt[tt$biomarker.id==biomarkers[[i]]$symbol,"bootstrap.validation.stat"] <- "validated"
             }
           }
@@ -213,7 +240,7 @@ for(drug in drugs) {
             results <- fnRunbootstrap(models=list("M0"=M0, "M3B"=M3B))
             tt[tt$biomarker.id==biomarkers[[i]]$id,stat.colname] <- median(results[["M3B"]])
             tt[tt$biomarker.id==biomarkers[[i]]$id,"gCSI.bootstrap.pvalue"] <- wilcox.test(results[["M3B"]], results[["M0"]], paired=TRUE, alternative="greater")$p.value        
-            if(tt[tt$biomarker.id==biomarkers[[i]]$id,"gCSI.bootstrap.pvalue"]<=0.05 && tt[tt$biomarker.id==biomarkers[[i]]$id,stat.colname] >= 0.55){
+            if(tt[tt$biomarker.id==biomarkers[[i]]$id,"gCSI.bootstrap.pvalue"]<=pvalue.cut.off && tt[tt$biomarker.id==biomarkers[[i]]$id,stat.colname] >= effect.size.cut.off){
               tt[tt$biomarker.id==biomarkers[[i]]$id,"bootstrap.validation.stat"] <- "validated"
             }
           }
@@ -290,7 +317,7 @@ lay <- rbind(c(rep(c(1,1,1,1),3),NA, rep(2,3),2))
 
 # valid.percent2 <- apply(valid.percent, c(1,2), function(x) return(ifelse(is.finite(x), x, 0)))
 
-pdf("barplot_gCSI_valid.pdf", height=10, width=12.5)
+pdf(file.path(path.diagrams, "barplot_gCSI_valid.pdf"), height=10, width=12.5)
 {
 
 valid.per.cat <- valid.per.cat[,c("Crizotinib", "lapatinib", "Erlotinib", "paclitaxel", "PD-0325901")]
@@ -360,7 +387,7 @@ grid.arrange(grobs = grobs, layout_matrix=lay, bottom=title2)
 }
 dev.off()
 
-pdf("AUC_dist_gCSI_Valid.pdf", height=7, width=11)
+pdf(file.path(path.diagrams, "AUC_dist_gCSI_Valid.pdf"), height=7, width=11)
 {
 drugs <- names(biomarkers)
 toPlot <- cbind(Dataset="gCSI", melt(gCSI.drug.sensitivity[,drugs],varnames=c("Cell", "Drug"),value.name = "AAC"))
@@ -510,7 +537,7 @@ for(drug in sort(names(biomarkers))){
                         "CCLE" = ccle.drug.sensitivity[common.cells.gCSI.ccle,drug], check.names=FALSE)
   toPlot2 <- data.frame("gCSI"=gCSI.drug.sensitivity[common.cells.gCSI.gdsc,drug], 
                         "GDSC" = gdsc.drug.sensitivity[common.cells.gCSI.gdsc,drug], check.names=FALSE)
-  pdf(file = sprintf("gCSI vs train AAC for %s.pdf", drug), height=14, width=7)
+  pdf(file = file.path(path.diagrams, sprintf("gCSI vs train AAC for %s.pdf", drug)), height=14, width=7)
   par(mfrow=c(2,1))
   # ScatterHist(toPlot1, "gCSI", "CCLE", title=sprintf("%s", drug), smoothmethod="lm", se=FALSE)
   myScatterPlot("", x=toPlot1$gCSI, y=toPlot1$CCLE, ylab="CCLE AAC", xlab="gCSI AAC", main=sprintf("%s", drug), cex=2, xlim=c(0,1), ylim=c(0,1))
@@ -566,7 +593,7 @@ toPlot <- rbind(toPlot1,toPlot2)
 colnames(toPlot) <- c("Cor", "Drug", "Status")
 
 # myPal <- RColorBrewer::brewer.pal(n=8, name="Set2")
-pdf("distribution_expression_biomarker.pdf", height=7, width=14)
+pdf(file.path(path.diagrams, "distribution_expression_biomarker.pdf"), height=7, width=14)
 ggplot(toPlot, aes(x=Cor)) + geom_density(fill="grey") + facet_wrap(~Drug, nrow=1) + theme_minimal() +
        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
        #scale_fill_manual(values=myPal[c(1,2)]) + 
@@ -587,9 +614,8 @@ dev.off()
 
 # }
 
-require(VennDiagram)
 myPal <- RColorBrewer::brewer.pal(n=9, name="Set1")
-pdf(file.path(file.path(path.diagrams, "gCSI_ccle_gdsc_celllines.pdf")), height=4, width=4)
+pdf(file.path(path.diagrams, "gCSI_ccle_gdsc_celllines.pdf"), height=4, width=4)
 venn.plot <-VennDiagram::draw.triple.venn(area1 = length(CCLE@cell$cellid), 
                                           area2 = length(GDSC@cell$cellid),
                                           area3 = length(cellNames(gCSI)),
@@ -606,7 +632,7 @@ venn.plot <-VennDiagram::draw.triple.venn(area1 = length(CCLE@cell$cellid),
                                           lty = "blank",cex = 1,cat.cex = 1,cat.col = c("black", "black","black"))
 dev.off()
 
-pdf(file.path(file.path(path.diagrams, "gCSI_ccle_gdsc_drugs.pdf")), height=4, width=4)
+pdf(file.path(path.diagrams, "gCSI_ccle_gdsc_drugs.pdf"), height=4, width=4)
 venn.plot <-VennDiagram::draw.triple.venn(area1 = length(drugNames(CCLE)), 
                                           area2 = length(drugNames(GDSC)),
                                           area3 = length(drugNames(gCSI)),
@@ -646,7 +672,7 @@ valid.per.cat <- data.frame(lapply(biomarkers, fnValidatedPerCat), check.names=F
 
 
 
-pdf(paste0("suppFig11.pdf"), height=30, width=18)
+pdf(file.path(path.diagrams, paste0("suppFig11.pdf")), height=30, width=18)
 layout(matrix(c(1:36), 6, 4, byrow = TRUE), heights=c(1,rep(3,5)), widths=c(1,rep(3,4)))
 
 plot(0,xaxt='n',yaxt='n',bty='n',pch='',ylab='',xlab='')
@@ -681,6 +707,8 @@ for (drug in names(validated.biomarkers)){
   text(1, 0, labels=paste0(drug, " - \n", top$biomarker.id), cex=3, srt=90, font=2)
 
   tissueTypes <- gCSI.tissuetype 
+  gene.data <- gCSI.genes.fpkm
+isoform.data <- gCSI.isoforms.fpkm
   M0 <- fnCreateNullModel(drug=drug, assay="gCSI")
 
   tissues <- sort(unique(tissueTypes[,1]))
@@ -703,6 +731,7 @@ for (drug in names(validated.biomarkers)){
     return(stat)
   }})
 
+
   # myTissues <- names(sort(table((as.character(tissueTypes[,1]))), decreasing=TRUE))
   Tissue <- tissues[top5][which.max(tissueCIndex[top5])]
   niceTissueName <- niceTissueNames[top5][which.max(tissueCIndex[top5])]
@@ -722,9 +751,6 @@ for (drug in names(validated.biomarkers)){
         gene.data <- gCSI.genes.fpkm
         isoform.data <- gCSI.isoforms.fpkm
       }
-
-
-
 
 
       mTitle <- paste0(niceTissueName)
@@ -755,7 +781,7 @@ for (drug in names(validated.biomarkers)){
 dev.off()
 
 
-pdf("suppFig10.pdf", height=30, width=18)
+pdf(file.path(path.diagrams, "suppFig10.pdf"), height=30, width=18)
 # par(mfrow=c(5,3))
 layout(matrix(c(1:36), 6, 4, byrow = TRUE), heights=c(1,rep(3,5)), widths=c(1,rep(3,4)))
 
@@ -811,7 +837,7 @@ dev.off()
 
 
 
-pdf(paste0("supplementary_file_all_tissues.pdf"), height=15, width=9, onefile=TRUE)
+pdf(file.path(path.diagrams, paste0("supplementary_file_all_tissues.pdf")), height=15, width=9, onefile=TRUE)
 
 for(drug in names(validated.biomarkers)) {
   par(mfrow=c(5,3))
@@ -891,7 +917,7 @@ dev.off()
 
 common.cells.gdsc.ccle <- intersect(common.cells.ccle, cellNames(GDSC))
 
-pdf(file = sprintf("gdsc_ccle_inconsistencies.pdf"), height=15, width=9)
+pdf(file.path(path.diagrams, file = sprintf("gdsc_ccle_inconsistencies.pdf")), height=15, width=9)
 par(mfrow=c(5,3))
 for(drug in sort(names(all.biomarkers))){
 
@@ -961,7 +987,7 @@ valid.per.cat <- data.frame(lapply(biomarkers.fdr, fnValidatedPerCat), check.nam
 
 ###########
 
-pdf("barplot_gCSI_valid_fdr.pdf", height=10, width=12.5)
+pdf(file.path(path.diagrams, "barplot_gCSI_valid_fdr.pdf"), height=10, width=12.5)
 {
 
 valid.per.cat <- valid.per.cat[,c("Crizotinib", "lapatinib", "Erlotinib", "paclitaxel", "PD-0325901")]
@@ -1086,7 +1112,7 @@ toPlot <- rbind(toPlot1,toPlot2)
 colnames(toPlot) <- c("Cor", "Drug", "Status")
 
 # myPal <- RColorBrewer::brewer.pal(n=8, name="Set2")
-pdf("distribution_expression_biomarker_fdr.pdf", height=7, width=14)
+pdf(file.path(path.diagrams, "distribution_expression_biomarker_fdr.pdf"), height=7, width=14)
 ggplot(toPlot, aes(x=Cor)) + geom_density(fill="grey") + facet_wrap(~Drug, nrow=1) + theme_minimal() +
        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
        #scale_fill_manual(values=myPal[c(1,2)]) + 

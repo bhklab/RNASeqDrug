@@ -1,12 +1,71 @@
-require(PharmacoGx) || stop("Library PharmacoGx is not available!")
-require(Biobase) || stop("Library Biobase is not available!")
-require(gdata) || stop("Library gdata is not available!")
-require(genefu) || stop("Library genefu is not available!")
-require(survcomp) || stop("Library survcomp is not available!")
+options(stringsAsFactors=FALSE)
+if(!require(calibrate)){install.packages("calibrate");library(calibrate)}
+if(!require(stringr)){install.packages("stringr");library(stringr)}
+if(!require(gdata)){install.packages("gdata");library(gdata)}
+if(!require(xtable)){install.packages("xtable");library(xtable)}
+if(!require(Hmisc)){install.packages("viridisLite");install.packages("Hmisc");library(Hmisc)}
+source("https://bioconductor.org/biocLite.R")
+if(!require("PharmacoGx")){biocLite("PharmacoGx");library(PharmacoGx)}
+if(!require("Biobase")){biocLite("Biobase");library(Biobase)}
 
-source("code/foo_FinalValidation.R")
+args <- commandArgs(trailingOnly=TRUE)
+##for test
+#args <- c("auc_recomputed_ccle_gdsc", "0.55", "0.05", "breast", "glm", "gaussian", "cindex", "fdr", "auc_recomputed", "TRUE", "training_ccle_gdsc.RData")
 
-load(file.path(path.data, "PSets/UHN_hs.RData"))
+
+path.result <- "../results"
+path.data <- "../data"
+path.code <- "."
+path.diagrams <- file.path(path.result, as.character(args[1]))
+if (!file.exists(path.diagrams)){dir.create(file.path(path.diagrams))}
+
+effect.size.cut.off <- as.numeric(args[2])
+pvalue.cut.off <- as.numeric(args[3])
+tissue <- as.character(args[4])
+model.method <- as.character(args[5])
+glm.family <- as.character(args[6]) 
+effect.size <- as.character(args[7]) #c("r.squared", "cindex")
+adjustment.method <- as.character(args[8])
+sensitivity.type <- phenotype <- as.character(args[9])
+RNA_seq.normalize <- as.logical(args[10])
+
+source(file.path(path.code, "foo.R"))
+source(file.path(path.code, "foo_PreValidation.R"))
+source(file.path(path.code, "foo_FinalValidation.R"))
+
+if(!exists("ccle.genes.fpkm")){
+  path.training.data <- file.path(path.data, as.character(args[11]))
+  load(path.training.data, verbose=TRUE)
+  if("gdsc.drug.sensitivity" %in% ls()) {
+    training.type <-"CCLE_GDSC"
+  } else {
+    training.type <-"CCLE"
+  }
+  genes <- colnames(ccle.genes.fpkm)
+  isoforms <- colnames(ccle.isoforms.fpkm)
+  load(file.path(path.data, "GRAY_hs.RData"))
+  gray.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GRAY, sensitivity.measure=sensitivity.type))
+  drugs <- intersect(colnames(ccle.drug.sensitivity), colnames(gray.drug.sensitivity))
+  gray.genes.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=GRAY, mDataType="rnaseq", features=genes, fill.missing=FALSE)))
+  gray.isoforms.fpkm <- t(Biobase::exprs(PharmacoGx::summarizeMolecularProfiles(pSet=GRAY, mDataType="isoforms", features=isoforms, fill.missing=FALSE)))
+  gray.isoforms.fpkm[which(is.na(gray.isoforms.fpkm))] <- 0
+  if(RNA_seq.normalize == TRUE) {
+   gray.genes.fpkm <- log2(gray.genes.fpkm + 1)
+   gray.isoforms.fpkm <- log2(gray.isoforms.fpkm + 1)
+  }
+  gray.cells <- intersect(rownames(gray.drug.sensitivity), rownames(gray.genes.fpkm))
+  gray.drug.sensitivity <- gray.drug.sensitivity[gray.cells, , drop=FALSE]
+  gray.genes.fpkm <- gray.genes.fpkm[gray.cells, , drop=FALSE]
+  gray.isoforms.fpkm <- gray.isoforms.fpkm[gray.cells, , drop=FALSE]
+}
+
+load(file.path(path.data, "UHN_hs.RData"))
+pp <- pData(UHN@molecularProfiles$rnaseq)
+xx <- which(pp$type == "control" | is.na(pp$type))
+#remove  treated cells and just keep theUHN@molecularProfiles$rnaseq <- UHN@molecularProfiles$rnaseq[xx,]
+#UHN@molecularProfiles$rnaseq <- UHN@molecularProfiles$rnaseq[xx,]
+#UHN@molecularProfiles$isoforms <- UHN@molecularProfiles$isoforms[xx,]
+
 ccle.drug.sensitivity[which(is.nan(ccle.drug.sensitivity))] <- NA
 gdsc.drug.sensitivity[which(is.nan(gdsc.drug.sensitivity))] <- NA
 gray.drug.sensitivity[which(is.nan(gray.drug.sensitivity))] <- NA
@@ -39,7 +98,7 @@ cutoff <- 0.1
 red <- mycol[1]  
 blue <- mycol[2]
 
-load(file.path(path.diagrams, "validated.biomarkers.gray.RData"), verbose=TRUE)
+load(file.path(path.data, "validated.biomarkers.gray.RData"), verbose=TRUE)
 for(drug in drugs) {
   validated.biomarkers[[drug]][, c("UHN.estimate", "UHN.pvalue", paste0("UHN.",effect.size), "gene.biotype")] <- NA
   validated.biomarkers[[drug]][,"id"] <- validated.biomarkers[[drug]][,"biomarker.id"]
@@ -52,7 +111,7 @@ for(drug in drugs) {
   xx[,"short.label"] <- gsub(".ISO$","",xx[,"short.label"])
   xx <- apply(xx, 1, function(x){x})
   
-  ###Figure 4
+  ###Figure 5
   ###heatmap of all pre validated biomarkers in GRAY for the drugs in common with UHN
   ###row labels are colored according to their specificity in GRAY
   rr <- fnPlotAUCoverCellLinesGray(drug=drug, tissue.type="all", biomarkers=xx, suffix="all.specificity", gray.specificity=gray.specificity)#, biomarkers.toPlot)
@@ -110,7 +169,7 @@ for(drug in drugs){
   rr[[drug]] <- validated.biomarkers[[drug]][which(validated.biomarkers[[drug]]$UHN.pvalue < cutoff & sign(as.numeric(validated.biomarkers[[drug]]$UHN.estimate)) == sign(as.numeric(as.numeric(validated.biomarkers[[drug]]$estimate)))),]
 }
 final.validated.biomarkers <- lapply(rr, function(x){if("UHN.cindex" %in% colnames(x)){x[order(x[, "UHN.cindex"], na.last=T, decreasing=T),]}else{x}})
-save(final.validated.biomarkers, file=file.path(path.diagrams, "validated.biomarkers.uhn.RData"))
+save(final.validated.biomarkers, file=file.path(path.data, "validated.biomarkers.uhn.RData"))
 
 isoforms <- list()
 for(drug in drugs) {
@@ -145,7 +204,7 @@ for(drug in drugs) {
   message(paste(isoforms[[drug]], collapse="  "))
   expression <- cbind(gray.isoforms.fpkm[ , isoforms[[drug]], drop=FALSE], "gene"=gray.genes.fpkm[, gene])
   xx <- cor(expression, expression, use="pairwise", method="spearman")
-  ###Figure 5
+  ###Figure 6
   ###Correlation of the biomarker to the other alternatively spliced products of the corresponding gene
   fnCor(drug, gene=symbol, xx, isoforms=isoforms[[drug]], best.isoform=best.isoform)
   ###Expression of the biomarker along with all the other alternatively spliced products of the corresponding gene
@@ -161,7 +220,7 @@ for(drug in drugs) {
   uhn.model <- lm(sensitivity  ~ exprs[names(sensitivity), best.isoform])
   ###Supplementary 14
   ###Predicted AUC values aginst the actual AUC values of the drug
-  myScatterPlot(Name=file.path("result/scatter", sprintf("%s_%s_aac.pdf", drug, symbol)), 
+  myScatterPlot(Name=file.path(path.diagrams, sprintf("%s_%s_aac.pdf", drug, symbol)), 
                 x=predict(uhn.model), 
                 y=sensitivity, 
                 legend.label=sprintf("cindex=%s",round(as.numeric(final.validated.biomarkers[[drug]][ii, "UHN.cindex"]), digits=2)), 
@@ -178,8 +237,8 @@ for(drug in drugs) {
   ###Expression of the biomarker along with all the other alternatively spliced products of the corresponding gene in UHN cells
   fnPlotHeatMap(sensitivity=sensitivity, file.name=sprintf("%s_%s", drug, symbol), cluster=FALSE, expression=expression, best.isoform=best.isoform)
   ###
-  colnames(expression)[ncol(expression)] <- annot.gene$EnsemblGeneId
+  #colnames(expression)[ncol(expression)] <- annot.gene$EnsemblGeneId
 
   
-  #colnames(expression)[ncol(expression)] <- gene
+  colnames(expression)[ncol(expression)] <- gene
 }

@@ -5,31 +5,20 @@ Gene isoforms as expression-based biomarkers predictive of drug response in vitr
 Abstract
 --------
 
-Background. Advances in genome-wide molecular profiling and high-throughput drug screening technologies offer a unique opportunity to identify new biomarkers predictive of response to anticancer therapies. If successfully validated in preclinical studies, these biomarkers could be advanced for testing in clinical trials to provide clinicians with tools to select the best therapy for each individual cancer patient, one of the main challenges in precision medicine. In this context, the vast majority of predictive biomarkers for targeted therapies are based on genetic aberrations or protein expressions, as opposed to transcriptomic biomarkers. However, the recent adoption of next-generation sequencing technologies enables accurate profiling of not only gene expression but also alternatively-spliced transcripts in large-scale pharmacogenomic studies. Given that altered mRNA splicing has been shown to be prominent in cancers, linking this feature to drug response will open new avenues of research in biomarker discovery. 
-Methods. To identify transcriptomic biomarkers for drug response while addressing the lack of reproducibility of drug sensitivity measurements across studies, we developed a meta-analytical framework combining the pharmacological data generated within the Cancer Cell Line Encyclopedia (CCLE) and the Genomics of Drug Sensitivity in Cancer (GDSC). Our framework consists of fitting predictive models with CCLE RNA-seq data as predictor variables, controlled for tissue type, and combined GDSC and CCLE drug sensitivity values as dependent variables. The accuracy and significance of the fitted models have been assessed using cross-validation, embedding both feature selection and model fitting.
-Results. We applied a two step validation model to assess the predictive value of the most promising isoform-based biomarkers in breast cancer. First, an existing independent pharmacogenomic dataset has been exploited to pre-validate the biomarkers that predict response to 8 drugs in a set of 70 breast cancer cell lines. Second, we selected four drugs with the most promising biomarkers (AZD6244, lapatinib, erlotinib and paclitaxel) to test whether their predictive value is robust to change in pharmacological assay. We successfully validated 10 isoform-based biomarkers predictive of drug response in breast cancer, including TNKS1BP1-005 as a biomarker for the EGFR/HER2 tyrosine kinase inhibitor (TKI) Lapatinib and TGFA-001 for the MEK TKI AZD6244. 
-Conclusion. The results of our meta-analysis of pharmacogenomic data suggest that isoforms represent a rich resource for biomarkers predictive of response to chemo- and targeted therapies. Our study also showed that the validation rate for this type of biomarkers is low (<50%) for most drugs, supporting the requirements for independent datasets to identify reproducible predictors of response to anticancer drugs.
- 
+Next-generation sequencing technologies have recently been used in pharmacogenomic studies to characterize large panels of cancer cell lines at the genomic and transcriptomic levels. Among these technologies, RNA-sequencing enable profiling of alternatively spliced transcripts. Given the high frequency of mRNA splicing in cancers, linking this feature to drug response will open new avenues of research in biomarker discovery. To identify robust transcriptomic biomarkers for drug response across studies, we develop a meta-analytical framework combining the pharmacological data from two large-scale drug screening datasets. We use an independent pan-cancer pharmacogenomic dataset to test the robustness of our candidate biomarkers across multiple cancer types. We further analyze two independent breast cancer datasets and find that specific isoforms of IGF2BP2, NECTIN4, ITGB6, and KLHDC9 are significantly associated with AZD6244, lapatinib, erlotinib, and paclitaxel, respectively. Our results support isoform expressions as a rich resource for biomarkers predictive of drug response. 
 
 Citation
 --------
 
 To cite this work in publication, use
 
-<a href="https://www.nature.com/articles/s41467-017-01153-8">Gene isoforms as expression-based biomarkers predictive of drug response in vitro.</a>
-Safikhani Z, Smirnov P, Thu KL, Silvester J, El-Hachem N, Quevedo R, Lupien M, Mak TW, Cescon D, Haibe-Kains B.
-Nat Commun. 2017 Oct 24;8(1):1126. doi: 10.1038/s41467-017-01153-8.
-PMID: <a href="https://www.ncbi.nlm.nih.gov/pubmed/29066719">29066719</a>
+Safikhani, Zhaleh and Smirnov, Petr and Thu, Kelsie L. and Silvester, Jennifer and El-Hachem, Nehme and Quevedo, Rene and Lupien, Mathieu and Mak, Tak W. and Cescon, David and Haibe-Kains, Benjamin, Gene isoforms as expression-based biomarkers predictive of drug response in vitro, Nature Communications, 2017, Volume 8, Number 1, Pages 1126, Doi: 10.1038/s41467-017-01153-8
 
 
 Reproducibility of the Analysis Results
 --------------------------------------------
 
-1.  Set up the software environment
-
-2.   Download pSets
-
-3.   Run the R scripts
+1.  Run the pipeline.sh
 
 
 Set up the software environment
@@ -74,7 +63,7 @@ Download pSets
 
 These pSets are required to be accessible for the scripts in a directory named data/PSets:
 
-CCLE_isoforms.RData, GRAY_isoforms.RData, UHN.RData, GDSC.RData
+CCLE_hs.RData, GRAY_hs.RData, UHN.RData, GDSC.RData, gCSI_hs.RData
 
 #You can contact the authors to get access to these datasets
 benjamin.haibe.kains@utoronto.ca, zhaleh.safikhani@utoronto.ca
@@ -82,7 +71,7 @@ benjamin.haibe.kains@utoronto.ca, zhaleh.safikhani@utoronto.ca
 Run the R scripts
 -------------------------------
 
-#training_phase.R: 
+#training.R: 
 
 Script is computing signature for the effect of each gene and its isoforms expression on the molecular profile of cell lines for each drug. It returns the estimated coefficient, the the p-values, statistics(mean, median, min, max and variance) of adjusted r squared for the association of each gene and its isoforms to each drug in a dataset named auc_recomputed_drug_association.RData.
 
@@ -92,15 +81,19 @@ Script is computing signature for the effect of each gene and its isoforms expre
 
 Script is computing the false discovery rate of the results and report the strongest breast cancer treatment biomarkers for all 15 drugs in common between CCLE and GDSC in a dataset named all.biomarkers.RData.
 
+#Pre_Validation_gcsi.R: 
+
+Script is validating biomarkers against gCSI dataset and put the validation results in validated.biomarker.gcsi.RData
+
 #Pre_Validation.R: 
 
-Script is validating biomarkers against GRAY dataset and put the validation results in Biomarkers_with_validation_status_2_R2.RData
+Script is validating biomarkers against GRAY dataset and put the validation results in validated.biomarker.gray.RData and breast.biomarkers.RData
 
 #Final_Validation.R: 
 
-Script is validating pre validated biomarkers against UHN dataset and pute the final validation results in Biomarkers_uhn_status.RData and creates the main figures of paper.
+Script is validating pre validated biomarkers against UHN dataset and pute the final validation results in validated.biomarker.uhn.RData
 
-#Supplementary_Files.R: 
+#Figures_Tables.R: 
 
 Script is creating supplemntary figures, files and tables
 

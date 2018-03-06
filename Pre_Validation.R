@@ -1,44 +1,50 @@
 options(stringsAsFactors=FALSE)
 
-require(PharmacoGx) || stop("Library PharmacoGx is not available!")
-require(Biobase) || stop("Library Biobase is not available!")
-require(calibrate) || stop("Library calibrate is not available!")
-require(stringr) || stop("Library stringr is not available!")
-require(gdata) || stop("Library gdata is not available!")
-require(genefu) || stop("Library genefu is not available!")
-require(xtable) || stop("Library xtable is not available!")
+if(!require(calibrate)){install.packages("calibrate");library(calibrate)}
+if(!require(stringr)){install.packages("stringr");library(stringr)}
+if(!require(gdata)){install.packages("gdata");library(gdata)}
+if(!require(xtable)){install.packages("xtable");library(xtable)}
+if(!require(Hmisc)){install.packages("viridisLite");install.packages("Hmisc");library(Hmisc)}
+source("https://bioconductor.org/biocLite.R")
+if(!require("PharmacoGx")){biocLite("PharmacoGx");library(PharmacoGx)}
+if(!require("Biobase")){biocLite("Biobase");library(Biobase)}
+#if(!require("genefu")){biocLite("genefu");library(genefu)}
 
-options(stringsAsFactors=FALSE)
+args <- commandArgs(trailingOnly=TRUE)
+##for test
+#args <- c("auc_recomputed_ccle_gdsc", "0.55", "0.05", "breast", "glm", "gaussian", "cindex", "fdr", "auc_recomputed", "TRUE", "training_ccle_gdsc.RData")
 
-effect.size.cut.off <- 0.55
-pvalue.cut.off <- 0.05
-source(file.path("code","foo_PreValidation.R"))
+path.result <- "../results"
+path.data <- "../data"
+path.code <- "."
+path.diagrams <- file.path(path.result, as.character(args[1]))
+if (!file.exists(path.diagrams)){dir.create(file.path(path.diagrams))}
+source(file.path(path.code,"foo_PreValidation.R"))
+source(file.path(path.code, "foo.R"))
+
+effect.size.cut.off <- as.numeric(args[2])
+pvalue.cut.off <- as.numeric(args[3])
+tissue <- as.character(args[4])
+model.method <- as.character(args[5])
+glm.family <- as.character(args[6]) 
+effect.size <- as.character(args[7]) #c("r.squared", "cindex")
+adjustment.method <- as.character(args[8])
+sensitivity.type <- phenotype <- as.character(args[9])
+RNA_seq.normalize <- as.logical(args[10])
 
 if(!exists("ccle.genes.fpkm")){
-  path.training.data <- "data/training_ccle_gdsc.RData"
+  path.training.data <- file.path(path.data, as.character(args[11]))
   load(path.training.data, verbose=TRUE)
   if("gdsc.drug.sensitivity" %in% ls()) {
     training.type <-"CCLE_GDSC"
   } else {
     training.type <-"CCLE"
   }
-  path.diagrams<- "result/auc_recomputed_ccle_gdsc"
-  tissue <- "breast"
-  model.method <- "glm"
-  glm.family <- "gaussian" 
-  effect.size <- "cindex" #c("r.squared", "cindex")
-  path.data <- "data"
-  path.code <- file.path("code")
-  path.result <- file.path("result")
-  adjustment.method <- "fdr"
-  source(file.path(path.code, "foo.R"))
 }
-sensitivity.type <- phenotype <- "auc_recomputed"
-RNA_seq.normalize <- TRUE
 genes <- colnames(ccle.genes.fpkm)
 isoforms <- colnames(ccle.isoforms.fpkm)
 
-load(file.path(path.data, "PSets/GRAY_hs.RData"))
+load(file.path(path.data, "GRAY_hs.RData"))
 gray.drug.sensitivity <- t(PharmacoGx::summarizeSensitivityProfiles(pSet=GRAY, sensitivity.measure=sensitivity.type))
 drugs <- intersect(colnames(ccle.drug.sensitivity), colnames(gray.drug.sensitivity))
 
@@ -54,10 +60,12 @@ gray.drug.sensitivity <- gray.drug.sensitivity[gray.cells, , drop=FALSE]
 gray.genes.fpkm <- gray.genes.fpkm[gray.cells, , drop=FALSE]
 gray.isoforms.fpkm <- gray.isoforms.fpkm[gray.cells, , drop=FALSE]
 
-load(file.path(path.diagrams, "all.biomarkers.RData"))
+#load(file.path(path.diagrams, "all.biomarkers.RData"))
+load(file.path(path.data, "all.biomarkers.RData"))
+
 max.bio.no <- max(sapply(all.biomarkers, function(x){nrow(x)}))
 breast.biomarkers <- fnValidation(top.significant.biomarkers=all.biomarkers, validation.cut.off=max.bio.no, validation.method=effect.size)
-save(breast.biomarkers, file=file.path(path.diagrams, "breast.biomarkers.RData"))
+save(breast.biomarkers, file=file.path(path.data, "breast.biomarkers.RData"))
 
 validated.biomarkers <- breast.biomarkers
 for(drug in drugs) {
@@ -67,7 +75,7 @@ for(drug in drugs) {
 breast <- all <- res.validated <- breast.validated.percent <- all.validated.percent <- validated.no <- NULL
 for(drug in drugs) {
   temp <- validated.biomarkers[[drug]]
-  if(length(xx) > 0) {
+  if(length(temp) > 0) {
     xx <- paste(t(apply(temp, 1, function(x){sprintf("%s(%s)", x["symbol"], x["type"])}) ), collapse="_")
     res.validated <-  c(res.validated, xx)
   } else {
@@ -101,7 +109,7 @@ write.csv(cbind("drug"=drugs,
 #fnGtex(validation.method=effect.size)
 #fnGtex(all.biomarkers=biomarkers, validation.method=validation.method)
 
-source("code/foo_training.R")
+source(file.path(path.code, "foo_training.R"))
 for(drug in drugs) {
   if(nrow(validated.biomarkers[[drug]]) > 0){
     tt <- which(validated.biomarkers[[drug]][,"transcript.id"]!= "")
@@ -148,7 +156,7 @@ for(drug in drugs) {
   }
 }
 
-save(validated.biomarkers, file=file.path(path.diagrams, "validated.biomarkers.gray.RData"))
+save(validated.biomarkers, file=file.path(path.data, "validated.biomarkers.gray.RData"))
 validated.biomarkers.fdr <- list()
 for(drug in names(validated.biomarkers)) {
   validated.biomarkers.fdr[[drug]] <- validated.biomarkers[[drug]]
@@ -159,5 +167,5 @@ for(drug in names(validated.biomarkers.fdr)) {
   validated.biomarkers.fdr[[drug]] <- validated.biomarkers.fdr[[drug]][which(validated.biomarkers.fdr[[drug]][,"gray.fdr"]< 0.05),]
 }
 sapply(validated.biomarkers, nrow)
-save(validated.biomarkers.fdr, file=file.path(path.diagrams, "validated.biomarkers.gray.fdr.RData"))
+save(validated.biomarkers.fdr, file=file.path(path.data, "validated.biomarkers.gray.fdr.RData"))
 
