@@ -18,8 +18,9 @@ Safikhani, Zhaleh and Smirnov, Petr and Thu, Kelsie L. and Silvester, Jennifer a
 Reproducibility of the Analysis Results
 --------------------------------------------
 
-1.  Run the pipeline.sh
+https://codeocean.com/capsule/012aaa90-ed73-41be-b47b-290815cf56e9/
 
+All the data, intermediate results of the pipeline and the preditions are available via above link.
 
 Set up the software environment
 -------------------------------
